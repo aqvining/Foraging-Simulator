@@ -16,17 +16,20 @@
 #' @field patches a simple feature data frame with geometries representing patches in the geometry column
 #' @field bounds a spatial features collection with one or more polygons defining the region in which any foragers can be created and moved to
 #' @export
-# @examples
-# Environment()
-# newForagers <- list(Forager(), Forager())
-# #foragers are created by default between -50 and 50 on both the x and y axis
-# newPatches <- lapply(rep(2, times = 20), function(x) st_point(runif(x, min = -50, max = 50)))
-# newPatches <- newPatches %>% st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.)))
-# newPatches <- newPatches %>% st_sf() %>% st_buffer(1)
-# newBounds <- st_sfc(st_convex_hull(reduce(newPatches$geometry, c)), crs = st_crs(newPatches))
-# Environment(newForagers, newPatches, newBounds)
-# @import methods
-# @import dplyr
+#' @export Environment
+#' @examples
+#' \dontrun{
+#' Environment()
+#' newForagers <- list(Forager(), Forager())
+#' #foragers are created by default between -50 and 50 on both the x and y axis
+#' newPatches <- lapply(rep(2, times = 20), function(x) st_point(runif(x, min = -50, max = 50)))
+#' newPatches <- newPatches %>% st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.)))
+#' newPatches <- newPatches %>% st_sf() %>% st_buffer(1)
+#' newBounds <- st_sfc(st_convex_hull(reduce(newPatches$geometry, c)), crs = st_crs(newPatches))
+#' Environment(newForagers, newPatches, newBounds)
+#' }
+#' @import methods
+#' @import dplyr
 Environment <- setRefClass("Environment",
                            field = list(foragers = "list", patches = "sf", bounds = "sfc_POLYGON"),
                            method = list(
@@ -70,6 +73,7 @@ Environment <- setRefClass("Environment",
 #' @field array the name of the array being run, if it has one
 #' @field trials the number of trials that have been run. Has no effect on the environment, merely usefull as metadata. Typically uses default value of 0 at creation.
 #' @export
+#' @export ArrayEnvironment
 #' @import methods
 ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "character", array = "character", trials = "numeric"), contains= "Environment",
                                 method = list(
@@ -106,6 +110,7 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
 #' @field repeatAvoid numeric giving the number of different patches a forager must visit before targeting a recently visited patch again
 #' @field target a simple feature data frame with a single row containing the target patch location and values
 #' @export
+#' @export Forager
 #' @import methods
 #' @importFrom circular circular rcircularuniform
 #' @import sp
@@ -181,6 +186,7 @@ Forager <- setRefClass("Forager",
 #' @field turnBias a numeric giving the radians from which the center of the wrapped cauchy distribution from which new bearings are drawn should be shifted from the previous bearing.
 #' @field persistence a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution
 #' @export
+#' @export BRWForager
 #' @import methods
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
 #' @import sp
@@ -231,6 +237,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
 #' @field repeatAvoid Numeric giving the number of different patches a forager must visit before targeting a recently visited patch again
 #' @field target A simple feature data frame with a single row containing the target patch location and values
 #' @export
+#' @export dForager
 #' @import methods
 dForager <- setRefClass("distanceForager", fields = list(), contains = "Forager",
                         methods = list(
@@ -295,7 +302,7 @@ lineBearing <- function(linestring) {
 #' @param turnBiases A single numeric giving the average turn angle of a forager in radians, or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
 #' @export
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
-createForagers <- function(numForagers, type = "Random", bounds = NA, locations = NA, bearings = NA, speeds = NA, persistences = NA, sights = NA, repeatAvoids = NA, quiet = FALSE, CRS = NA, turnBiases = NA) {
+createForagers <- function(numForagers, type = "Random", bounds = NA, locations = NA, bearings = NA, speeds = NA, persistences = NA, sights = NA, repeatAvoids = NA, quiet = FALSE, CRS = "NA", turnBiases = NA) {
   if (is.na(bearings)) {
     if (! quiet) warning("No bearings given, initial values drawn from circular random uniform distribution")
     bearings <- as.numeric(rwrappedcauchy(n = numForagers, mu = circular(0), rho = 0))

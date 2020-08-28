@@ -40,3 +40,15 @@ Constructor Function for objects of Reference Class 'Environment'
 \item{\code{progress()}}{moves the entire environment forward one timestep by moving all foragers once and processing impact of foraging on patches}
 }}
 
+\examples{
+\dontrun{
+Environment()
+newForagers <- list(Forager(), Forager())
+#foragers are created by default between -50 and 50 on both the x and y axis
+newPatches <- lapply(rep(2, times = 20), function(x) st_point(runif(x, min = -50, max = 50)))
+newPatches <- newPatches \%>\% st_sfc \%>\% data.frame(geom = ., NAME = as.character(1:length(.)))
+newPatches <- newPatches \%>\% st_sf() \%>\% st_buffer(1)
+newBounds <- st_sfc(st_convex_hull(reduce(newPatches$geometry, c)), crs = st_crs(newPatches))
+Environment(newForagers, newPatches, newBounds)
+}
+}

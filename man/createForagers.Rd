@@ -15,7 +15,7 @@ createForagers(
   sights = NA,
   repeatAvoids = NA,
   quiet = FALSE,
-  CRS = NA,
+  CRS = "NA",
   turnBiases = NA
 )
 }
