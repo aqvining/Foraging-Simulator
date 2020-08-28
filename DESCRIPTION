@@ -1,0 +1,14 @@
+Package: ForageR
+Type: Package
+Title: Simulating Forager Movement In Environments With Discrete Resource Distributions
+Version: 0.1.0
+Author: Alexander Vining
+Maintainer: Alexander Vining <aqvining@ucdavis.edu>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: MIT
+Encoding: UTF-8
+LazyData: true
+Imports: circular, stats, dplyr, sp, ggplot2, geosphere, stplanr, units, spatstat, methods, purrr
+Depends: sf
+RoxygenNote: 7.1.1
