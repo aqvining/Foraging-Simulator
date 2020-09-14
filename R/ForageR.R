@@ -268,7 +268,7 @@ dForager <- setRefClass("distanceForager", fields = list(), contains = "Forager"
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
 #' @import sp
 #' @import ggplot2
-DDBRWForager <- setRefClass("ddbrwForager", fields = list(turnBias = "numeric", persistence = "numeric"), contains = "brwForager",
+DDBRWForager <- setRefClass("ddbrwForager", contains = "brwForager",
                           methods = list(
                             initialize = function(...) {
                               callSuper(...)
@@ -300,7 +300,8 @@ selector <- function(choices){
 getChoices <- function(forager, patches) {
   recentVisits <- forager$visitSeq[c((length(forager$visitSeq) - (forager$repeatAvoid - 1)):length(forager$visitSeq))] #check which patches forager has visited recently
   patches <- patches[! patches$NAME %in% recentVisits,] #remove recently visited patches
-  distances <- drop_units(st_distance(forager$location, patches)) #get distances to each patch
+  distances <- st_distance(forager$location, patches) #get distances to each patch
+  if ("units" %in% class(distances)) distances <- drop_units(distances)
   if (sum(distances <= forager$sight) == 0) return(NA)                                                                        #if no patches in sight, return no target
   choices <- patches[which(distances[1,] <= forager$sight),]
   choices$DIST <- distances[distances[1,] <= forager$sight]
