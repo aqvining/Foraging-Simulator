@@ -1,9 +1,12 @@
+##~~Patch Notes
+#Fix drop units errors
+
 #' @import sp
 #' @import dplyr
 #' @importFrom circular circular rwrappedcauchy
 #' @importFrom purrr reduce
 #' @importFrom stats runif
-#' @importFrom units drop_units
+#' @importFrom units set_units
 #' @import methods
 #' @import sf
 
@@ -144,7 +147,7 @@ Forager <- setRefClass("Forager",
                        move = function(bounds = NA) {"moves the forager using rules given in class description. Updates relevant fields including location, bearing, visitSeq, bearing, targetting, and path"
                          if (targeting) { #if a target is given, assess proximity and action
                            bearing <<- lineBearing(st_nearest_points(st_set_crs(st_sfc(location), st_crs(target)), target)) #set bearing toward target
-                           if (abs(drop_units(st_distance(location, target$geometry))) <= 2 * speed) { #if target is in reach
+                           if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
                              location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
                              visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
                              targeting <<- FALSE
@@ -199,7 +202,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                             move = function(bounds = NA){
                               if (targeting) { #if a target is given, assess proximity and action
                                 bearing <<- lineBearing(st_nearest_points(st_set_crs(st_sfc(location), st_crs(target)), target)) #set bearing toward target
-                                if (abs(drop_units(st_distance(location, target$geometry))) <= 2 * speed) { #if target is in reach
+                                if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
                                   location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
                                   visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
                                   targeting <<- FALSE
@@ -296,12 +299,11 @@ selector <- function(choices){
 #
 #' @param forager A single object of Forager class
 #' @param patches A simple features data frame with a geom column containing the geometries of patches.
-#' @importFrom units drop_units
+#' @importFrom units set_units
 getChoices <- function(forager, patches) {
   recentVisits <- forager$visitSeq[c((length(forager$visitSeq) - (forager$repeatAvoid - 1)):length(forager$visitSeq))] #check which patches forager has visited recently
   patches <- patches[! patches$NAME %in% recentVisits,] #remove recently visited patches
-  distances <- st_distance(forager$location, patches) #get distances to each patch
-  if ("units" %in% class(distances)) distances <- drop_units(distances)
+  distances <- set_units(st_distance(forager$location, patches), NULL) #get distances to each patch
   if (sum(distances <= forager$sight) == 0) return(NA)                                                                        #if no patches in sight, return no target
   choices <- patches[which(distances[1,] <= forager$sight),]
   choices$DIST <- distances[distances[1,] <= forager$sight]
