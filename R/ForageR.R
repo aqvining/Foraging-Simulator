@@ -247,7 +247,38 @@ dForager <- setRefClass("distanceForager", fields = list(), contains = "Forager"
                             return(selector(choices))
                           }))
 
-
+#' @title ddbrwForager constructor
+#
+#' @description Constructor function for a Distance Discounting Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target. Target selection is wieghted toward closer targets.
+#' @inherit brwForager
+#' @field location a simple features collection with a single POINT class object
+#' @field bearing a numeric that gives the current bearing in radians. Default starting bearing is drawn from random uniform circular distribution
+#' @field speed a numeric value that gives the scale parameter of the gamma distribution from which step lengths are draw. Because the shape parameter of this distribution is set to 1, the speed variable will equal the average step length
+#' @field sight a numeric giving the distance at which the forager object can detect patches when in an environment
+#' @field path a simple features collection with a single multipoint object containing previous locations of the forager. Usually objects are created with default multipoint objects containing only the initial location
+#' @field visitSeq a character vector with the names (in order) of all patches visited. Must start with NAs equal in number to to the repeatAvoid variable (this is done by default if no value is given)
+#' @field targeting a logical giving which mode of movement the forager is in. Initial value usually uses default "FALSE"
+#' @field repeatAvoid numeric giving the number of different patches a forager must visit before targeting a recently visited patch again
+#' @field target a simple feature data frame with a single row containing the target patch location and values
+#' @field turnBias a numeric giving the radians from which the center of the wrapped cauchy distribution from which new bearings are drawn should be shifted from the previous bearing.
+#' @field persistence a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution
+#' @export
+#' @export DDBRWForager
+#' @import methods
+#' @importFrom circular circular rcircularuniform rwrappedcauchy
+#' @import sp
+#' @import ggplot2
+DDBRWForager <- setRefClass("ddbrwForager", fields = list(turnBias = "numeric", persistence = "numeric"), contains = "brwForager",
+                          methods = list(
+                            initialize = function(...) {
+                              callSuper(...)
+                            },
+                            tSelect = function(choices) {
+                              if (sum(choices$DIST == 0) > 0) return(choices[which(choices$DIST == 0),][1,])                                         #if on a patch, return that patch as target. If on multiple, return the first
+                              choices$prob <- choices$DIST^3/sum(choices$DIST^3) #distance discounted choice
+                              return(selector(choices))
+                            })
+)
 # Function to make a selection given a set of probabilities
 #
 #' @param choices a datafame with a column named "prob". Values in this column should be numeric and and up to 1.
