@@ -1,5 +1,9 @@
 ##~~Patch Notes
-#Fix drop units errors
+#Fix drop units errors +
+#Forager Paths as Linestrings +
+#Allow multiple linestrings in Forager paths +
+#Add crwForager
+#dont relocate forager in ArrayEnvironment after final trial +
 
 #' @import sp
 #' @import dplyr
@@ -54,7 +58,7 @@ Environment <- setRefClass("Environment",
                              },
                              plotCurrent = function(){ "displays the current location of all foragers and patch geometries"
                                fLocations <- st_sf(geom = reduce(lapply(foragers, function(X) X$location),c), TYPE = as.character(sapply(foragers, class)), SPEED = sapply(foragers, function(X) X$speed)) #gets simple feature geometry column for each forager location in a list, then combines all into one simple feature geometry column
-                               cPlot <- ggplot() + geom_sf(data = fLocations, aes(color = TYPE), shape = 13, size = 3) + geom_sf(data = patches$geometry, fill = "green") + geom_sf(data = bounds, linetype = "longdash", fill = NA) + theme_classic()
+                               cPlot <- ggplot() + geom_sf(data = patches, fill = "green") + geom_sf(data = fLocations, aes(color = TYPE), shape = 13, size = 3) + geom_sf(data = bounds, linetype = "longdash", fill = NA) + theme_classic()
                                return(cPlot)
                              },
                              plotPaths = function(){ "displays the current location and path of all foragers as well as patch geometries"
@@ -80,21 +84,29 @@ Environment <- setRefClass("Environment",
 #' @import methods
 ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "character", array = "character", trials = "numeric"), contains= "Environment",
                                 method = list(
-                                  initialize = function(..., sequence = character(0), array = "DT", trials = 0) { "Set default values for variables that are not entered manually"
+                                  initialize = function(...,
+                                                        sequence = character(0),
+                                                        array = "DT",
+                                                        trials = 0) { "Set default values for variables that are not entered manually"
                                     callSuper(..., sequence = sequence, array = array, trials = trials)
+                                    if (length(foragers) > 1) {
+                                      warning("ArrayEnvironment can only handle a single forager. All additional foragers removed")
+                                      foragers <<- foragers[1]
+                                    }
                                   },
                                   progress = function(){ "Moves all foragers as desribed in parent class Environment. Then looks to see if any foragers have either visited all patches or moved 10000 steps in their current trial.
                                     If any forager has, it's patch visitation sequence is combined with the sequence field, its location field is randomized within bounds, and its visitSeq field is reset"
+                                    if (length(foragers[[1]]$path) < trials) {
+                                      foragers[[1]]$location <<- generateBoundedPoint(bounds)
+                                      foragers[[1]]$path[[trials]] <<- st_cast(test$foragers[[1]]$location, "LINESTRING")[[1]]
+                                      foragers[[1]]$bearing <<- as.numeric(rwrappedcauchy(n = 1, mu = circular(0), rho = 0))
+                                      foragers[[1]]$visitSeq <<- rep("NA", times = foragers[[1]]$repeatAvoid)
+                                    }
                                     callSuper()
                                     for (forager in foragers) {
-                                      if (length(unique(forager$visitSeq[-c(1:forager$repeatAvoid)])) == length(patches) | nrow(forager$path) >= 10000) { #end conditions for trial
+                                      if (length(unique(forager$visitSeq[-c(1:forager$repeatAvoid)])) == nrow(patches) | length(forager$path[[1]]) >= 5000) { #end conditions for trial 1) Forager has been to all patches, 2) forager has made 2500 steps (length of multipoints object in path[[1]] counts both x and y coordinates, so length of 5000 is == 2500 steps)
                                         sequence <<- c(sequence, forager$visitSeq[-c(1:forager$repeatAvoid)])
                                         trials <<- trials + 1
-                                        forager$location <- st_point(c(runif(1, st_bbox(bounds)["xmin"], st_bbox(bounds)["xmax"]), runif(1, st_bbox(bounds)["ymin"], st_bbox(bounds)["ymax"])))
-                                        while(! st_within(forager$location, bounds, sparse = FALSE)[1,1]) forager$location <- st_point(c(runif(1, st_bbox(bounds)["xmin"], st_bbox(bounds)["xmax"]), runif(1, st_bbox(bounds)["ymin"], st_bbox(bounds)["ymax"])))
-                                        names(forager$location) <- c("x", "y")
-                                        forager$bearing <- as.numeric(rwrappedcauchy(n = 1, mu = circular(0), rho = 0))
-                                        forager$visitSeq <- rep("NA", times = forager$repeatAvoid)
                                       }
                                     }
                                   }
@@ -124,7 +136,7 @@ Forager <- setRefClass("Forager",
                                                            bearing = as.numeric(rcircularuniform(1)),
                                                            speed = 1, #the mean distance traveled when moving randomly, drawn from a gamma distribution with k (shape) = 1, and theta(scale) = speed. When targeting, moves at 2X speed
                                                            sight = 4,
-                                                           path = st_cast(location, "MULTIPOINT"),
+                                                           path = st_cast(location, "LINESTRING"),
                                                            repeatAvoid = 2,
                                                            visitSeq = rep("NA", times = repeatAvoid),#NA's prevent errors when checking for recent visits
                                                            targeting = FALSE,
@@ -163,7 +175,7 @@ Forager <- setRefClass("Forager",
                              }
                            }
                          }
-                         path[[1]] <<- st_multipoint(rbind(path[[1]], location[[1]]))
+                         path[[length(path)]] <<- st_linestring(rbind(path[[length(path)]], location[[1]]))
                          attr(path, "bbox") <<- setNames(unlist(bbox(as_Spatial(path))), c("xmin", "ymin", "xmax", "ymax"))
                          attr(location, "bbox") <<- setNames(unlist(bbox(as_Spatial(location))), c("xmin", "ymin", "xmax", "ymax"))
                        },
