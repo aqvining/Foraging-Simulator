@@ -105,6 +105,7 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
                                     callSuper()
                                     for (forager in foragers) {
                                       if (length(unique(forager$visitSeq[-c(1:forager$repeatAvoid)])) == nrow(patches) | nrow(forager$path[[1]]) >= 2500) { #end conditions for trial 1) Forager has been to all patches, 2) forager has made 2500 steps
+                                        sequence <<- c(sequence, forager$visitSeq[-c(1:forager$repeatAvoid)])
                                         trials <<- trials + 1
                                       }
                                     }
