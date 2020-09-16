@@ -1,8 +1,8 @@
 ##~~Patch Notes
 #Fix drop units errors +
-#Forager Paths as Linestrings +
+#Forager, brwForager Paths as Linestrings +
 #Allow multiple linestrings in Forager paths +
-#Add crwForager
+#Add crwForager -
 #dont relocate forager in ArrayEnvironment after final trial +
 
 #' @import sp
@@ -169,7 +169,7 @@ Forager <- setRefClass("Forager",
                            location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                            if (!is.na(bounds)){ #check for valid bounds
                              while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
-                               location[1] <<- st_point(path[[1]][nrow(path[[1]]),]) #reset location
+                               location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
                                bearing <<- as.numeric(rcircularuniform(1))
                                location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                              }
@@ -225,14 +225,14 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                                 if (!is.na(bounds)){ #check for valid bounds
                                   turnVarIncrease <- 0
                                   while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
-                                    location[1] <<- st_point(path[[1]][nrow(path[[1]]),]) #reset location
+                                    location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
                                     if(persistence-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional persistence
                                     bearing <<- as.numeric(circular(bearing) + rwrappedcauchy(n = 1, mu = circular(0), rho = persistence - turnVarIncrease)) # get new bearing
                                     location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #try moving again
                                   }
                                 }
                               }
-                              path[[1]] <<- st_multipoint(rbind(path[[1]], location[[1]]))
+                              path[[length(path)]] <<- st_linestring(rbind(path[[length(path)]], location[[1]]))
                               attr(path, "bbox") <<- setNames(unlist(bbox(as_Spatial(path))), c("xmin", "ymin", "xmax", "ymax"))
                               attr(location, "bbox") <<- setNames(unlist(bbox(as_Spatial(location))), c("xmin", "ymin", "xmax", "ymax"))
                             })
