@@ -98,14 +98,13 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
                                     If any forager has, it's patch visitation sequence is combined with the sequence field, its location field is randomized within bounds, and its visitSeq field is reset"
                                     if (length(foragers[[1]]$path) < trials) {
                                       foragers[[1]]$location <<- generateBoundedPoint(bounds)
-                                      foragers[[1]]$path[[trials]] <<- st_cast(test$foragers[[1]]$location, "LINESTRING")[[1]]
+                                      foragers[[1]]$path[[trials]] <<- st_cast(foragers[[1]]$location, "LINESTRING")[[1]]
                                       foragers[[1]]$bearing <<- as.numeric(rwrappedcauchy(n = 1, mu = circular(0), rho = 0))
                                       foragers[[1]]$visitSeq <<- rep("NA", times = foragers[[1]]$repeatAvoid)
                                     }
                                     callSuper()
                                     for (forager in foragers) {
-                                      if (length(unique(forager$visitSeq[-c(1:forager$repeatAvoid)])) == nrow(patches) | length(forager$path[[1]]) >= 5000) { #end conditions for trial 1) Forager has been to all patches, 2) forager has made 2500 steps (length of multipoints object in path[[1]] counts both x and y coordinates, so length of 5000 is == 2500 steps)
-                                        sequence <<- c(sequence, forager$visitSeq[-c(1:forager$repeatAvoid)])
+                                      if (length(unique(forager$visitSeq[-c(1:forager$repeatAvoid)])) == nrow(patches) | nrow(forager$path[[1]]) >= 2500) { #end conditions for trial 1) Forager has been to all patches, 2) forager has made 2500 steps
                                         trials <<- trials + 1
                                       }
                                     }
@@ -169,7 +168,7 @@ Forager <- setRefClass("Forager",
                            location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                            if (!is.na(bounds)){ #check for valid bounds
                              while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
-                               location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
+                               location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location: gets the last linestring in the path sfc, then gets the last row of that linestring matrix
                                bearing <<- as.numeric(rcircularuniform(1))
                                location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                              }
