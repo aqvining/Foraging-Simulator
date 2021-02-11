@@ -41,7 +41,10 @@ Environment <- setRefClass("Environment",
                            field = list(foragers = "list", patches = "sf", bounds = "sfc_POLYGON"),
                            method = list(
                              initialize = function(...,
-                                                   patches = lapply(rep(2, times = 10), function(x) st_point(runif(x, min = -15, max = 15))) %>% st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.))) %>% st_sf() %>% st_buffer(1) %>% st_set_crs(32610),
+                                                   patches = lapply(rep(2, times = 10), function(x) st_point(runif(x, min = -15, max = 15))) %>%
+                                                     st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.))) %>%
+                                                     st_sf() %>% st_buffer(1)
+                                                   %>% st_set_crs(32610),
                                                    bounds = st_sfc(st_buffer(st_convex_hull(reduce(patches$geometry, c)),1), crs = st_crs(patches)), #default bounds created as convex hull around patches with a buffer of one
                                                    foragers = createForagers(3, bounds = bounds, speed = 2, quiet = TRUE) #default creation of forager within bounds
                              ){  "Set default values for variables that are not entered manually"
@@ -214,31 +217,32 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                             move = function(bounds = NA){
                               #This function gets new x, y position for the forager.
                               if (targeting) { #if a target is given, assess proximity and action
-                                bearing <<- location %>% st_sfc() %>%  #prepares location for comparison to target (which may have multiple location points)
-                                  st_set_crs(value = st_crs(target)) %>%
+                                bearing <<- location %>% st_set_crs(value = st_crs(target)) %>% #prepares location for comparison to target (which may have multiple location points)
                                   st_nearest_points(target) %>% #returns linestring between forager and target
-                                  lineBearing() %>% #converts linestring to bearing
-                                  rwrappedcauchy(n = 1,
-                                                 mu = as.circular(., type = "angles", units = "radians", template = "none", zero = 0, modulo = "asis", rotation = "counter"),
-                                                 rho = persistence)
+                                  lineBearing() %>% circular(modulo = "2pi") %>% #converts linestring to bearing
+                                  rwrappedcauchy(n = 1, mu = ., rho = persistence) %>%
+                                  as.numeric()
+
                                 if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
                                   location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
                                   visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
                                   targeting <<- FALSE
                                 } else location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
                               } else { #if not targeting
-                                bearing <<- as.numeric(circular(bearing) + rwrappedcauchy(n = 1,
-                                                                                          mu = as.circular(turnBias, type = "angles", units = "radians", template = "none", zero = 0, modulo = "asis", rotation = "counter"),
-                                                                                          rho = persistence))
+                                bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
+                                                                                          mu = as.circular(turnBias, type = "angles", units = "radians", template = "none", zero = 0, modulo = "2pi", rotation = "counter"),
+                                                                                          rho = persistence),
+                                                                modulo = "2pi"))
                                 location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                                 if (!is.na(bounds)){ #check for valid bounds
                                   turnVarIncrease <- 0
                                   while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds, if so . . .
                                     location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
                                     if(persistence-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional persistence
-                                    bearing <<- as.numeric( circular(bearing) + rwrappedcauchy(n = 1,
-                                                                                              mu = circular(0),
-                                                                                              rho = persistence - turnVarIncrease)) # get new bearing
+                                    bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
+                                                                                             mu = circular(0),
+                                                                                             rho = persistence - turnVarIncrease),
+                                                                    modulo = "2pi")) # get new bearing
                                     location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #try moving again
                                   }
                                 }
