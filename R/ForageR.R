@@ -42,7 +42,7 @@ Environment <- setRefClass("Environment",
                            method = list(
                              initialize = function(...,
                                                    patches = lapply(rep(2, times = 10), function(x) st_point(runif(x, min = -15, max = 15))) %>%
-                                                     st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.))) %>%
+                                                     st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.)), MAX_VALUE = 10, VALUE = 8, REGEN = 1) %>%
                                                      st_sf() %>% st_buffer(1)
                                                    %>% st_set_crs(32610),
                                                    bounds = st_sfc(st_buffer(st_convex_hull(reduce(patches$geometry, c)),1), crs = st_crs(patches)), #default bounds created as convex hull around patches with a buffer of one
@@ -54,7 +54,12 @@ Environment <- setRefClass("Environment",
                                for (forager in foragers[sample(length(foragers))]) {#operates on each forager in random order
                                  if (! forager$targeting) forager$setTarget(patches) #If the forager does not currently have a target, look for one
                                  forager$move(bounds = bounds)
+                                 if(forager$foraging) execute_forage(forager)
                                }
+                             },
+                             execute_forage <- function(forager) { #reduces the value of the forager's target patch, will eventually also increase energy of forager
+                               updated_patch <- forager$target$NAME
+                               patches <<- patches %>% mutate(VALUE = VALUE - (NAME %in% updated_patch)) #subtracts 1 from VALUE if patch name matches target. Consider multiplying by extraction efficiency value
                              },
                              plotPatches = function(){ "displays the current patch geometries"
                                return(ggplot(data = patches) + geom_sf(fill = "green", axes = TRUE) + theme_classic()) #plots all geometries in patches field
