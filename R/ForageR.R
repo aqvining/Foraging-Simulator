@@ -187,7 +187,7 @@ Forager <- setRefClass("Forager",
 
 #' @title brwForager constructor
 #
-#' @description Constructor function for a Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target
+#' @description Constructor function for a Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target (retaining persistence, but not bias)
 #' @inherit Forager
 #' @field location a simple features collection with a single POINT class object
 #' @field bearing a numeric that gives the current bearing in radians. Default starting bearing is drawn from random uniform circular distribution
@@ -212,22 +212,33 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                               callSuper(..., turnBias = turnBias, persistence = persistence)
                             },
                             move = function(bounds = NA){
+                              #This function gets new x, y position for the forager.
                               if (targeting) { #if a target is given, assess proximity and action
-                                bearing <<- lineBearing(st_nearest_points(st_set_crs(st_sfc(location), st_crs(target)), target)) #set bearing toward target
+                                bearing <<- location %>% st_sfc() %>%  #prepares location for comparison to target (which may have multiple location points)
+                                  st_set_crs(value = st_crs(target)) %>%
+                                  st_nearest_points(target) %>% #returns linestring between forager and target
+                                  lineBearing() %>% #converts linestring to bearing
+                                  rwrappedcauchy(n = 1,
+                                                 mu = as.circular(., type = "angles", units = "radians", template = "none", zero = 0, modulo = "asis", rotation = "counter"),
+                                                 rho = persistence)
                                 if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
                                   location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
                                   visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
                                   targeting <<- FALSE
                                 } else location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
                               } else { #if not targeting
-                                bearing <<- as.numeric(circular(bearing) + rwrappedcauchy(n = 1, mu = as.circular(turnBias, type = "angles", units = "radians", template = "none", zero = 0, modulo = "asis", rotation = "counter"), rho = persistence))
-                                location[1] <<- location + speed * c(cos(bearing), sin(bearing))
+                                bearing <<- as.numeric(circular(bearing) + rwrappedcauchy(n = 1,
+                                                                                          mu = as.circular(turnBias, type = "angles", units = "radians", template = "none", zero = 0, modulo = "asis", rotation = "counter"),
+                                                                                          rho = persistence))
+                                location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                                 if (!is.na(bounds)){ #check for valid bounds
                                   turnVarIncrease <- 0
-                                  while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
+                                  while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds, if so . . .
                                     location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
                                     if(persistence-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional persistence
-                                    bearing <<- as.numeric(circular(bearing) + rwrappedcauchy(n = 1, mu = circular(0), rho = persistence - turnVarIncrease)) # get new bearing
+                                    bearing <<- as.numeric( circular(bearing) + rwrappedcauchy(n = 1,
+                                                                                              mu = circular(0),
+                                                                                              rho = persistence - turnVarIncrease)) # get new bearing
                                     location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #try moving again
                                   }
                                 }
