@@ -52,14 +52,18 @@ Environment <- setRefClass("Environment",
                              },
                              progress = function(){ "moves the entire environment forward one timestep by moving all foragers once and processing impact of foraging on patches"
                                for (forager in foragers[sample(length(foragers))]) {#operates on each forager in random order
-                                 if (! forager$targeting) forager$setTarget(patches) #If the forager does not currently have a target, look for one
+                                 if (! forager$targeting & ! forager$foraging) forager$setTarget(patches) #If the forager does not currently have a target, look for one
                                  forager$move(bounds = bounds)
                                  if(forager$foraging) execute_forage(forager)
                                }
                              },
                              execute_forage <- function(forager) { #reduces the value of the forager's target patch, will eventually also increase energy of forager
                                updated_patch <- forager$target$NAME
-                               patches <<- patches %>% mutate(VALUE = VALUE - (NAME %in% updated_patch)) #subtracts 1 from VALUE if patch name matches target. Consider multiplying by extraction efficiency value
+                               extraction <- patches %>% filter(NAME = updated_patch)$VALUE * 0.1 #Extracts 1/10th of VALUE from patch. Consider a more explicit model or variable to control the reduction
+                               patches <<- patches %>% mutate(VALUE = VALUE - (NAME %in% updated_patch) * extraction) #update value in patches
+                               forager$energy <- forager$energy + extraction
+                               forager$target <- patches %>% filter(NAME = updated_patch)
+                               if(forager$giving_up_density < extraction) forager$foraging <- FALSE
                              },
                              plotPatches = function(){ "displays the current patch geometries"
                                return(ggplot(data = patches) + geom_sf(fill = "green", axes = TRUE) + theme_classic()) #plots all geometries in patches field
@@ -139,7 +143,7 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
 #' @import sp
 #' @import ggplot2
 Forager <- setRefClass("Forager",
-                       field = list(location="sfc", bearing ="numeric", speed = "numeric", sight = "numeric", path = "sfc", visitSeq = "character", targeting = "logical", repeatAvoid = "numeric", target = "sf"),
+                       field = list(location="sfc", bearing ="numeric", speed = "numeric", sight = "numeric", path = "sfc", visitSeq = "character", targeting = "logical", foraging = "logical", giving_up_denisty = "numeric", energy = "numeric", repeatAvoid = "numeric", target = "sf"),
                        method = list(initialize = function(...,location = st_sfc(st_point(runif(2, -50, 50))),
                                                            bearing = as.numeric(rcircularuniform(1)),
                                                            speed = 1, #the mean distance traveled when moving randomly, drawn from a gamma distribution with k (shape) = 1, and theta(scale) = speed. When targeting, moves at 2X speed
@@ -148,8 +152,10 @@ Forager <- setRefClass("Forager",
                                                            repeatAvoid = 2,
                                                            visitSeq = rep("NA", times = repeatAvoid),#NA's prevent errors when checking for recent visits
                                                            targeting = FALSE,
+                                                           foraging = FALSE,
+                                                           giving_up_density = 5,
                                                            target = st_sf(st_sfc(st_multipolygon()))) {
-                         callSuper(..., location = location, bearing = bearing, speed = speed, sight = sight, path = path, visitSeq = visitSeq, targeting = targeting, target = target, repeatAvoid = repeatAvoid)
+                         callSuper(..., location = location, bearing = bearing, speed = speed, sight = sight, path = path, visitSeq = visitSeq, targeting = targeting, foraging = foraging, giving_up_density = giving_up_density, target = target, repeatAvoid = repeatAvoid)
                        },
                        setTarget = function(patches) { "checks if the location of any simple features in the geometry column of the patches argument (class sfc) are within sight range.
                          If so, sets target to a patch randomly selected from those within sight and then sets the targetting field to TRUE"
@@ -171,15 +177,21 @@ Forager <- setRefClass("Forager",
                              location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
                              visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
                              targeting <<- FALSE
+                             foraging <<- TRUE
                            } else location[1] <<- location + 2 * speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
                          } else { #if not targeting
+                           if(foraging) bounds = target$geometry
                            bearing <<- as.numeric(rcircularuniform(1))
-                           location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
+                           location[1] <<- location + rgamma(1,
+                                                             shape = 1,
+                                                             scale = speed/(1 + foraging)) * c(cos(bearing), sin(bearing))
                            if (!is.na(bounds)){ #check for valid bounds
                              while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
                                location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location: gets the last linestring in the path sfc, then gets the last row of that linestring matrix
                                bearing <<- as.numeric(rcircularuniform(1))
-                               location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
+                               location[1] <<- location + rgamma(1,
+                                                                 shape = 1,
+                                                                 scale = speed/(1 + foraging)) * c(cos(bearing), sin(bearing)) #speed reduced by half if foraging
                              }
                            }
                          }
@@ -221,6 +233,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                             },
                             move = function(bounds = NA){
                               #This function gets new x, y position for the forager.
+                              if (foraging) callSuper()
                               if (targeting) { #if a target is given, assess proximity and action
                                 bearing <<- location %>% st_set_crs(value = st_crs(target)) %>% #prepares location for comparison to target (which may have multiple location points)
                                   st_nearest_points(target) %>% #returns linestring between forager and target
