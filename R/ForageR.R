@@ -148,32 +148,61 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
 #' @import sp
 #' @import ggplot2
 Forager <- setRefClass("Forager",
-                       field = list(location="sfc", bearing ="numeric", speed = "numeric", sight = "numeric", path = "sfc", visitSeq = "character", targeting = "logical", foraging = "logical", giving_up_density = "numeric", energy = "numeric", repeatAvoid = "numeric", target = "sf"),
-                       method = list(initialize = function(...,location = st_sfc(st_point(runif(2, -50, 50))),
+                       field = list(location="sfc",
+                                    bearing ="numeric",
+                                    speed = "numeric",
+                                    sight = "numeric",
+                                    path = "sfc",
+                                    visitSeq = "character",
+                                    targeting = "logical",
+                                    foraging = "logical",
+                                    giving_up_density = "numeric",
+                                    energy = "numeric",
+                                    repeatAvoid = "numeric",
+                                    choice_determinism = "numeric",
+                                    target = "sf"),
+                       method = list(
+                         initialize = function(...,location = st_sfc(st_point(runif(2, -50, 50))),
                                                            bearing = as.numeric(rcircularuniform(1)),
                                                            speed = 1, #the mean distance traveled when moving randomly, drawn from a gamma distribution with k (shape) = 1, and theta(scale) = speed. When targeting, moves at 2X speed
                                                            sight = 4,
                                                            path = st_cast(location, "LINESTRING"),
-                                                           repeatAvoid = 2,
                                                            visitSeq = rep("NA", times = repeatAvoid),#NA's prevent errors when checking for recent visits
                                                            targeting = FALSE,
                                                            foraging = FALSE,
                                                            giving_up_density = 0.5,
                                                            energy = 0,
+                                                           repeatAvoid = 0,
+                                                           choice_determinism = 0,
                                                            target = st_sf(st_sfc(st_multipolygon()))) {
-                         callSuper(..., location = location, bearing = bearing, speed = speed, sight = sight, path = path, visitSeq = visitSeq, targeting = targeting, foraging = foraging, giving_up_density = giving_up_density, energy = energy, target = target, repeatAvoid = repeatAvoid)
-                       },
+                           callSuper(...,
+                                     location = location,
+                                     bearing = bearing,
+                                     speed = speed,
+                                     sight = sight,
+                                     path = path,
+                                     visitSeq = visitSeq,
+                                     targeting = targeting,
+                                     foraging = foraging,
+                                     giving_up_density = giving_up_density,
+                                     energy = energy,
+                                     target = target,
+                                     repeatAvoid = repeatAvoid,
+                                     choice_determinism = choice_determinism)
+                         },
                        setTarget = function(patches) { "checks if the location of any simple features in the geometry column of the patches argument (class sfc) are within sight range.
                          If so, sets target to a patch randomly selected from those within sight and then sets the targetting field to TRUE"
                          if (! "sf" %in% class(patches)) stop("the 'patches' argument of setTarget must be a simple feature collection")
                          choices <- getChoices(.self, patches)
-                         if (! "sf" %in% class(choices)) return()
+                         if (! "sf" %in% class(choices)) return() #no target set if no patches found in sight
                          target <<- tSelect(choices)
                          targeting <<- TRUE
                        },
-                       tSelect = function(choices) { "calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect). A forager will always select a patch it is on if possible. Otherwise, selection is random"
-                         if (sum(choices$DIST == 0) > 0) return(choices[which(choices$DIST == 0),][1,])     #if on a patch, return that patch as target. If on multiple, return the first
-                         choices$prob <- rep(1/nrow(choices), times = nrow(choices)) #random choice
+                       tSelect = function(choices) { "calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect)."
+                         #Choices is a spatial features df with same structure as patches plus a DIST column giving the patch distance to forager.
+                         choices$attraction <- (choices$VALUE - 5 * giving_up_density)/choices$DIST #Sets attraction based on value of distance. 5 - giving_up_denisty reflects the currently arbitrary extraction rate of foragers (this magic number needs parameterization). Thus, Attraction is the patch value above half way where the forager will give up divided by the distance that must be traveled to get there. This function breaks the chooser if attraction goes below 0, better solutions are needed
+                         choices$attraction <- scale_attraction(choices$attraction, choice_determinism) #scale attractions based on choice determinism
+                         choices$prob <- choices$attraction / sum(choices$attraction)
                          return(selector(choices))
                        },
                        move = function(bounds = NA) {"moves the forager using rules given in class description. Updates relevant fields including location, bearing, visitSeq, bearing, targetting, and path"
@@ -391,7 +420,20 @@ lineBearing <- function(linestring) {
 #' @param turnBiases A single numeric giving the average turn angle of a forager in radians, or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
 #' @export
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
-createForagers <- function(numForagers, type = "Random", bounds = NA, locations = NA, bearings = NA, speeds = NA, persistences = NA, sights = NA, giving_up_density = NA, repeatAvoids = NA, quiet = FALSE, CRS = "NA", turnBiases = NA) {
+createForagers <- function(numForagers,
+                           type = "Random",
+                           bounds = NA,
+                           locations = NA,
+                           bearings = NA,
+                           speeds = NA,
+                           persistences = NA,
+                           sights = NA,
+                           giving_up_density = NA,
+                           repeatAvoids = NA,
+                           quiet = FALSE,
+                           CRS = "NA",
+                           turnBiases = NA,
+                           choice_determinism = NA) {
   if (is.na(bearings)) {
     if (! quiet) warning("No bearings given, initial values drawn from circular random uniform distribution")
     bearings <- as.numeric(rwrappedcauchy(n = numForagers, mu = circular(0), rho = 0))
@@ -409,8 +451,12 @@ createForagers <- function(numForagers, type = "Random", bounds = NA, locations 
     giving_up_density <- 0.5
   }
   if (is.na(repeatAvoids)) {
-    if (! quiet) warning("No patch avoidance memory given. Initial values set to avoid 2 most recently visited patches")
-    repeatAvoids <-  2
+    if (! quiet) warning("No patch avoidance memory given. Initial values set to avoid 0 most recently visited patches")
+    repeatAvoids <-  0
+  }
+  if (is.na(choice_determinism)){
+    if (! quiet) warning("no choice determinism given. Initial values set to 0 (make choices proportional to attraction)")
+    choice_determinism <- 0
   }
   if (is.na(locations)) {
     if (is.na(bounds)) {
@@ -440,9 +486,24 @@ createForagers <- function(numForagers, type = "Random", bounds = NA, locations 
   if(!length(locations) == numForagers) stop("number of locations given must equal value of numForagers argument")
   locations <- lapply(locations, to_sf_point, crs = st_crs(bounds))
   foragers <- vector("list", length = numForagers)
-  parameters <- st_sf(geom = reduce(locations,c), BEARING = bearings, SPEED = speeds, PERSISTENCE = persistences, SIGHT = sights, GUD = giving_up_density, REPEATAVOID = repeatAvoids, BIAS = turnBiases)
-  if(type == "Random") for (i in 1:numForagers) foragers[[i]] <- Forager(location=parameters$geom[i], bearing = parameters$BEARING[i], speed = parameters$SPEED[i], sight = parameters$SIGHT[i], giving_up_density = parameters$GUD, repeatAvoid = parameters$REPEATAVOID[i])
-  if(type == "BRW") for (i in 1:numForagers) foragers[[i]] <- BRWForager(location=parameters$geom[i], bearing = parameters$BEARING[i], speed = parameters$SPEED[i], sight = parameters$SIGHT[i], giving_up_density = parameters$GUD, repeatAvoid = parameters$REPEATAVOID[i], persistence = parameters$PERSISTENCE[i], turnBias = parameters$BIAS[i])
+  parameters <- st_sf(geom = reduce(locations,c), BEARING = bearings, SPEED = speeds, SIGHT = sights, GUD = giving_up_density, REPEATAVOID = repeatAvoids, DET = choice_determinism, PERSISTENCE = persistences, BIAS = turnBiases)
+  if(type == "Random") for (i in 1:numForagers) foragers[[i]] <- Forager(location=parameters$geom[i],
+                                                                         bearing = parameters$BEARING[i],
+                                                                         speed = parameters$SPEED[i],
+                                                                         sight = parameters$SIGHT[i],
+                                                                         giving_up_density = parameters$GUD[i],
+                                                                         repeatAvoid = parameters$REPEATAVOID[i],
+                                                                         choice_determinism = parameters$DET[i]
+                                                                         )
+  if(type == "BRW") for (i in 1:numForagers) foragers[[i]] <- BRWForager(location=parameters$geom[i],
+                                                                         bearing = parameters$BEARING[i],
+                                                                         speed = parameters$SPEED[i],
+                                                                         sight = parameters$SIGHT[i],
+                                                                         giving_up_density = parameters$GUD[i],
+                                                                         repeatAvoid = parameters$REPEATAVOID[i],
+                                                                         choice_determinism = parameters$DET[i],
+                                                                         persistence = parameters$PERSISTENCE[i],
+                                                                         turnBias = parameters$BIAS[i])
   return(foragers)
 }
 
@@ -473,6 +534,26 @@ logistic_growth <- function(y, max = 1, scale = 0.2, yadj = 0.5) {
   t <- t + 1
   y <- (max/yadj) * (1/(1+exp(-scale*(t))) -yadj) #reconverts from t to y
   return(y)
+}
+
+#' @description Modifies a vector of attraction values based on the deterministic nature of the choice. When choice determinism is positive, the best choice becomes relatively more attractive.
+#
+#' @param attractions a vector of numerics representing attractiveness of various options
+#' @param choice_determinism numeric. At 0, choice probability is directly proportional to attraction. When negative, the choice becomes more random. When positive, better options become relatively more attractive. Absolute values of 1 approach full randomness/determinism
+#' @examples
+#' x <- seq(0,10,0.1)
+#'
+#' plot(x, scale_attraction(x, 0))
+#' lines(x, scale_attraction(x, 0.2), col = "green")
+#' lines(x, scale_attraction(x, 0.5), col = "yellow")
+#' lines(x, scale_attraction(x, 0.9), col = "red")
+#' lines(x, scale_attraction(x, -0.2), col = "green")
+#' lines(x, scale_attraction(x, -0.5), col = "yellow")
+#' lines(x, scale_attraction(x, -0.9), col = "red")
+scale_attraction <- function(attractions, choice_determinism) {
+  #output: a vector of numerics of equal length to input
+  attractions <- attractions^(100^choice_determinism)/max(attractions)^((100^choice_determinism)-1) #100 is a scaling parameter chosen to see strong effects at -1 and 1.
+  return(attractions)
 }
 
 # Function to create a simple features collection containing a single point created randomly within a set of polygons
