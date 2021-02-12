@@ -56,6 +56,7 @@ Environment <- setRefClass("Environment",
                                  forager$move(bounds = bounds)
                                  if(forager$foraging) execute_forage(forager)
                                }
+                               patches <<- patches %>% mutate(VALUE = logistic_growth(y = VALUE, max = MAX_VALUE, scale = REGEN))
                              },
                              execute_forage = function(forager) { #reduces the value of the forager's target patch, will eventually also increase energy of forager
                                updated_patch <- forager$target$NAME
@@ -63,7 +64,7 @@ Environment <- setRefClass("Environment",
                                  st_drop_geometry() %>%
                                  filter(NAME == updated_patch) %>%
                                  select(VALUE) %>%
-                                 unlist() * 0.1           #extraction needs to be a numeric not a data.frame, but this feels hackey
+                                 unlist() * 0.1           #extraction needs to be a numeric not a data.frame, but this feels hacky
                                patches <<- patches %>% mutate(VALUE = VALUE - (NAME %in% updated_patch) * extraction) #update value in patches
                                forager$energy <- forager$energy + extraction
                                forager$target <- patches %>% filter(NAME == updated_patch)
@@ -157,7 +158,7 @@ Forager <- setRefClass("Forager",
                                                            visitSeq = rep("NA", times = repeatAvoid),#NA's prevent errors when checking for recent visits
                                                            targeting = FALSE,
                                                            foraging = FALSE,
-                                                           giving_up_density = 0.2,
+                                                           giving_up_density = 0.5,
                                                            energy = 0,
                                                            target = st_sf(st_sfc(st_multipolygon()))) {
                          callSuper(..., location = location, bearing = bearing, speed = speed, sight = sight, path = path, visitSeq = visitSeq, targeting = targeting, foraging = foraging, giving_up_density = giving_up_density, energy = energy, target = target, repeatAvoid = repeatAvoid)
@@ -306,7 +307,7 @@ dForager <- setRefClass("distanceForager", fields = list(), contains = "Forager"
 
 #' @title ddbrwForager constructor
 #
-#' @description Constructor function for a Distance Discounting Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target. Target selection is wieghted toward closer targets.
+#' @description Constructor function for a Distance Discounting Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target. Target selection is weighted toward closer targets.
 #' @inherit brwForager
 #' @field location a simple features collection with a single POINT class object
 #' @field bearing a numeric that gives the current bearing in radians. Default starting bearing is drawn from random uniform circular distribution
@@ -390,7 +391,7 @@ lineBearing <- function(linestring) {
 #' @param turnBiases A single numeric giving the average turn angle of a forager in radians, or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
 #' @export
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
-createForagers <- function(numForagers, type = "Random", bounds = NA, locations = NA, bearings = NA, speeds = NA, persistences = NA, sights = NA, repeatAvoids = NA, quiet = FALSE, CRS = "NA", turnBiases = NA) {
+createForagers <- function(numForagers, type = "Random", bounds = NA, locations = NA, bearings = NA, speeds = NA, persistences = NA, sights = NA, giving_up_density = NA, repeatAvoids = NA, quiet = FALSE, CRS = "NA", turnBiases = NA) {
   if (is.na(bearings)) {
     if (! quiet) warning("No bearings given, initial values drawn from circular random uniform distribution")
     bearings <- as.numeric(rwrappedcauchy(n = numForagers, mu = circular(0), rho = 0))
@@ -402,6 +403,10 @@ createForagers <- function(numForagers, type = "Random", bounds = NA, locations 
   if (is.na(sights)) {
     if (! quiet) warning("No sight ranges given, initial values set to 5")
     sights <- 5
+  }
+  if (is.na(giving_up_density)) {
+    if (! quiet) warning("No giving up density given, initial values set to 0.5")
+    giving_up_density <- 0.5
   }
   if (is.na(repeatAvoids)) {
     if (! quiet) warning("No patch avoidance memory given. Initial values set to avoid 2 most recently visited patches")
@@ -435,9 +440,9 @@ createForagers <- function(numForagers, type = "Random", bounds = NA, locations 
   if(!length(locations) == numForagers) stop("number of locations given must equal value of numForagers argument")
   locations <- lapply(locations, to_sf_point, crs = st_crs(bounds))
   foragers <- vector("list", length = numForagers)
-  parameters <- st_sf(geom = reduce(locations,c), BEARING = bearings, SPEED = speeds, PERSISTENCE = persistences, SIGHT = sights, REPEATAVOID = repeatAvoids, BIAS = turnBiases)
-  if(type == "Random") for (i in 1:numForagers) foragers[[i]] <- Forager(location=parameters$geom[i], bearing = parameters$BEARING[i], speed = parameters$SPEED[i], sight = parameters$SIGHT[i], repeatAvoid = parameters$REPEATAVOID[i])
-  if(type == "BRW") for (i in 1:numForagers) foragers[[i]] <- BRWForager(location=parameters$geom[i], bearing = parameters$BEARING[i], speed = parameters$SPEED[i], sight = parameters$SIGHT[i], repeatAvoid = parameters$REPEATAVOID[i], persistence = parameters$PERSISTENCE[i], turnBias = parameters$BIAS[i])
+  parameters <- st_sf(geom = reduce(locations,c), BEARING = bearings, SPEED = speeds, PERSISTENCE = persistences, SIGHT = sights, GUD = giving_up_density, REPEATAVOID = repeatAvoids, BIAS = turnBiases)
+  if(type == "Random") for (i in 1:numForagers) foragers[[i]] <- Forager(location=parameters$geom[i], bearing = parameters$BEARING[i], speed = parameters$SPEED[i], sight = parameters$SIGHT[i], giving_up_density = parameters$GUD, repeatAvoid = parameters$REPEATAVOID[i])
+  if(type == "BRW") for (i in 1:numForagers) foragers[[i]] <- BRWForager(location=parameters$geom[i], bearing = parameters$BEARING[i], speed = parameters$SPEED[i], sight = parameters$SIGHT[i], giving_up_density = parameters$GUD, repeatAvoid = parameters$REPEATAVOID[i], persistence = parameters$PERSISTENCE[i], turnBias = parameters$BIAS[i])
   return(foragers)
 }
 
@@ -454,6 +459,21 @@ to_sf_point <- function(point, crs = NA) {
   if ("sfc_POINT" %in% class(point)) return(point) else stop("point argument must be a numeric vector, a POINT object, or a geometry collection with POINT objects")
 }
 
+#' @description A function to determine a patches location on its logistic growth curve (solved from VALUE), then increase VALUE by one unit of time on the curve
+#
+#' @param y a vector of numerics representing current values experiencing logistic growth
+#' @param max the horizontal asymptote of the growth function
+#' @param scale the maximum growth rate
+#' @param yadj scales the sigmoid midpoint on y axis, relative to max. At 0.5, maximum growth occurs at time 0
+logistic_growth <- function(y, max = 1, scale = 0.2, yadj = 0.5) {
+  #output: a vector of numerics of equal length to input
+  #description: returns values in the x variable as a function of logistic growth, using remaining input parameters
+  #Notes: This is probably a more complicated growth curve than necessary
+  t <- log(-(yadj * (max + y))/((yadj - 1) * max + (yadj * y)))/scale #gets current location on growth curve (solved from modified logistic growth equation below)
+  t <- t + 1
+  y <- (max/yadj) * (1/(1+exp(-scale*(t))) -yadj) #reconverts from t to y
+  return(y)
+}
 
 # Function to create a simple features collection containing a single point created randomly within a set of polygons
 #
