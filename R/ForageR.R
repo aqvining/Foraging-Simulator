@@ -64,7 +64,7 @@ Environment <- setRefClass("Environment",
                                  st_drop_geometry() %>%
                                  filter(NAME == updated_patch) %>%
                                  select(VALUE) %>%
-                                 unlist() * 0.1           #extraction needs to be a numeric not a data.frame, but this feels hacky
+                                 unlist() * forager$efficiency           #extraction needs to be a numeric not a data.frame, but this feels hacky
                                patches <<- patches %>% mutate(VALUE = VALUE - (NAME %in% updated_patch) * extraction) #update value in patches
                                forager$energy <- forager$energy + extraction
                                forager$target <- patches %>% filter(NAME == updated_patch)
@@ -157,24 +157,26 @@ Forager <- setRefClass("Forager",
                                     targeting = "logical",
                                     foraging = "logical",
                                     giving_up_density = "numeric",
+                                    efficiency = "numeric",
                                     energy = "numeric",
                                     repeatAvoid = "numeric",
                                     choice_determinism = "numeric",
                                     target = "sf"),
                        method = list(
                          initialize = function(...,location = st_sfc(st_point(runif(2, -50, 50))),
-                                                           bearing = as.numeric(rcircularuniform(1)),
-                                                           speed = 1, #the mean distance traveled when moving randomly, drawn from a gamma distribution with k (shape) = 1, and theta(scale) = speed. When targeting, moves at 2X speed
-                                                           sight = 4,
-                                                           path = st_cast(location, "LINESTRING"),
-                                                           visitSeq = rep("NA", times = repeatAvoid),#NA's prevent errors when checking for recent visits
-                                                           targeting = FALSE,
-                                                           foraging = FALSE,
-                                                           giving_up_density = 0.5,
-                                                           energy = 0,
-                                                           repeatAvoid = 0,
-                                                           choice_determinism = 0,
-                                                           target = st_sf(st_sfc(st_multipolygon()))) {
+                                               bearing = as.numeric(rcircularuniform(1)),
+                                               speed = 1, #the mean distance traveled when moving randomly, drawn from a gamma distribution with k (shape) = 1, and theta(scale) = speed. When targeting, moves at 2X speed
+                                               sight = 4,
+                                               path = st_cast(location, "LINESTRING"),
+                                               visitSeq = rep("NA", times = repeatAvoid),#NA's prevent errors when checking for recent visits
+                                               targeting = FALSE,
+                                               foraging = FALSE,
+                                               giving_up_density = 0.5,
+                                               efficiency = 0.1,
+                                               energy = 0,
+                                               repeatAvoid = 0,
+                                               choice_determinism = 0,
+                                               target = st_sf(st_sfc(st_multipolygon()))) {
                            callSuper(...,
                                      location = location,
                                      bearing = bearing,
@@ -185,10 +187,12 @@ Forager <- setRefClass("Forager",
                                      targeting = targeting,
                                      foraging = foraging,
                                      giving_up_density = giving_up_density,
+                                     efficiency = efficiency,
                                      energy = energy,
                                      target = target,
                                      repeatAvoid = repeatAvoid,
                                      choice_determinism = choice_determinism)
+                           if (speed < 0) stop("speed must be a postive value")
                          },
                        setTarget = function(patches) { "checks if the location of any simple features in the geometry column of the patches argument (class sfc) are within sight range.
                          If so, sets target to a patch randomly selected from those within sight and then sets the targetting field to TRUE"
@@ -200,7 +204,7 @@ Forager <- setRefClass("Forager",
                        },
                        tSelect = function(choices) { "calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect)."
                          #Choices is a spatial features df with same structure as patches plus a DIST column giving the patch distance to forager.
-                         choices$attraction <- (choices$VALUE - 5 * giving_up_density)/choices$DIST #Sets attraction based on value of distance. 5 - giving_up_denisty reflects the currently arbitrary extraction rate of foragers (this magic number needs parameterization). Thus, Attraction is the patch value above half way where the forager will give up divided by the distance that must be traveled to get there. This function breaks the chooser if attraction goes below 0, better solutions are needed
+                         choices$attraction <- (choices$VALUE)/(choices$DIST = 0.001) #Sets attraction based on value and distance. Offset is to avoid dividing by 0 if on a patch boundary
                          choices$attraction <- scale_attraction(choices$attraction, choice_determinism) #scale attractions based on choice determinism
                          choices$prob <- choices$attraction / sum(choices$attraction)
                          return(selector(choices))
@@ -242,7 +246,7 @@ Forager <- setRefClass("Forager",
 
 #' @title brwForager constructor
 #
-#' @description Constructor function for a Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target (retaining persistence, but not bias)
+#' @description Constructor function for a Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target (retaining concentration, but not bias)
 #' @inherit Forager
 #' @field location a simple features collection with a single POINT class object
 #' @field bearing a numeric that gives the current bearing in radians. Default starting bearing is drawn from random uniform circular distribution
@@ -254,17 +258,18 @@ Forager <- setRefClass("Forager",
 #' @field repeatAvoid numeric giving the number of different patches a forager must visit before targeting a recently visited patch again
 #' @field target a simple feature data frame with a single row containing the target patch location and values
 #' @field turnBias a numeric giving the radians from which the center of the wrapped cauchy distribution from which new bearings are drawn should be shifted from the previous bearing.
-#' @field persistence a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution
+#' @field concentration a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution
+#' @field persistence a numeric between 0 and 1 which weights the value of last step direction relative to the direction of a target when selecting new bearing
 #' @export
 #' @export BRWForager
 #' @import methods
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
 #' @import sp
 #' @import ggplot2
-BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", persistence = "numeric"), contains = "Forager",
+BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", concentration = "numeric", persistence = "numeric"), contains = "Forager",
                           methods = list(
-                            initialize = function(..., turnBias = 0, persistence = 0.6) {
-                              callSuper(..., turnBias = turnBias, persistence = persistence)
+                            initialize = function(..., turnBias = 0, concentration = 0.6, persistence = 0.5) {
+                              callSuper(..., turnBias = turnBias, concentration = concentration, persistence = persistence)
                             },
                             move = function(bounds = NA){
                               #This function gets new x, y position for the forager.
@@ -273,32 +278,39 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                                 return()
                               }
                               if (targeting) { #if a target is given, assess proximity and action
-                                bearing <<- location %>% st_set_crs(value = st_crs(target)) %>% #prepares location for comparison to target (which may have multiple location points)
+                                target_direction <- location %>% st_set_crs(value = st_crs(target)) %>% #prepares location for comparison to target (which may have multiple location points)
                                   st_nearest_points(target) %>% #returns linestring between forager and target
-                                  lineBearing() %>% circular(modulo = "2pi") %>% #converts linestring to bearing
-                                  rwrappedcauchy(n = 1, mu = ., rho = persistence) %>%
-                                  as.numeric()
+                                  lineBearing() #gets angle between endpoints of linestring
 
                                 if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
                                   location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
                                   visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
+                                  bearing <<- target_direction
                                   targeting <<- FALSE
                                   foraging <<- TRUE
-                                } else location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
+                                } else { #if target is not in reach
+                                  target_deviation <- circular(target_direction - bearing, modulo = "2pi")
+                                  if(abs(target_deviation) > pi) target_deviation <- target_deviation - (2*pi)
+                                  targeting_bias <- (1-persistence) * target_deviation #peak of turning angle probability density should be between current bearing and target direction, with location in this range determined by persistence
+                                  bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
+                                                                                           mu = targeting_bias,
+                                                                                           rho = concentration),
+                                                                  modulo = "2pi"))
+                                  location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
+                                }
                               } else { #if not targeting
-                                bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
-                                                                                          mu = as.circular(turnBias, type = "angles", units = "radians", template = "none", zero = 0, modulo = "2pi", rotation = "counter"),
-                                                                                          rho = persistence),
-                                                                modulo = "2pi"))
+                                bearing <<- as.numeric(circular(bearing, modulo = "2pi") + rwrappedcauchy(n = 1,
+                                                                                                          mu = circular(turnBias, modulo = "2pi"),
+                                                                                                          rho = concentration))
                                 location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                                 if (!is.na(bounds)){ #check for valid bounds
                                   turnVarIncrease <- 0
                                   while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds, if so . . .
                                     location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
-                                    if(persistence-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional persistence
+                                    if(concentration-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional concentration
                                     bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
                                                                                              mu = circular(0),
-                                                                                             rho = persistence - turnVarIncrease),
+                                                                                             rho = concentration - turnVarIncrease),
                                                                     modulo = "2pi")) # get new bearing
                                     location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #try moving again
                                   }
@@ -310,7 +322,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", pers
                             })
 )
 
-#' @title dForager Constrctor
+#' @title dForager Constructor
 #
 #' @description Constructor function for distance Forager class objects. Obects of this class behave exactly like forager class objects, but when selecting a target, distance foragers prefer closer targets, discounting targets probability of selection by the cube of their distance
 #' @inherit Forager
@@ -348,7 +360,7 @@ dForager <- setRefClass("distanceForager", fields = list(), contains = "Forager"
 #' @field repeatAvoid numeric giving the number of different patches a forager must visit before targeting a recently visited patch again
 #' @field target a simple feature data frame with a single row containing the target patch location and values
 #' @field turnBias a numeric giving the radians from which the center of the wrapped cauchy distribution from which new bearings are drawn should be shifted from the previous bearing.
-#' @field persistence a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution
+#' @field concentration a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution
 #' @export
 #' @export DDBRWForager
 #' @import methods
@@ -412,8 +424,10 @@ lineBearing <- function(linestring) {
 #' @param locations A list of simple features collections each containing a single st_POINT giving the initial location of a new forager. If NA or empty, foragers will be created at random locations within bounds
 #' @param bearings A single numeric giving the initial bearing of all new foragers in radians or a list of numerics equal in length to the value of numForagers
 #' @param speeds A single numeric giving the initial speed of all new foragers or a list of numerics equal in length to the value of numForagers
-#' @param persistences A single numeric giving the initial persistence of all new foragers or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
+#' @param concentrations A single numeric giving the initial concentration of all new foragers or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
 #' @param sights A single numeric giving the initial sight range of all new foragers or a list of numerics equal in length to the value of numForagers
+#' @param giving_up_denisty the per-step energy return at which an agent will leave a foraging patch
+#' @param efficiency the proportion of a patch that an agent extracts and adds to its energy each time step spend foraging
 #' @param repeatAvoids A single numeric giving the number of unique patches a forager must visit before revisting a patch, or a list of numerics equal in length to the value of numForagers
 #' @param quiet A logical indicating whether to suppress warnings about default values used to fill in empty fields
 #' @param CRS A numeric giving the CRS code to assign to forager locations. If bounds argument is defined, the CRS of that object will be used and this argument will be ignored
@@ -426,9 +440,11 @@ createForagers <- function(numForagers,
                            locations = NA,
                            bearings = NA,
                            speeds = NA,
+                           concentrations = NA,
                            persistences = NA,
                            sights = NA,
                            giving_up_density = NA,
+                           efficiency = NA,
                            repeatAvoids = NA,
                            quiet = FALSE,
                            CRS = "NA",
@@ -449,6 +465,10 @@ createForagers <- function(numForagers,
   if (is.na(giving_up_density)) {
     if (! quiet) warning("No giving up density given, initial values set to 0.5")
     giving_up_density <- 0.5
+  }
+  if (is.na(giving_up_density)) {
+    if (! quiet) warning("No efficiencies given, initial values set to 0.1")
+    efficiency <- 0.1
   }
   if (is.na(repeatAvoids)) {
     if (! quiet) warning("No patch avoidance memory given. Initial values set to avoid 0 most recently visited patches")
@@ -474,10 +494,14 @@ createForagers <- function(numForagers,
     }
   }
   if (type == "BRW"){
-     if(is.na(persistences)){
-       if (! quiet) warning("No turning persistences given, initial values set to 0.7")
-       persistences <- 0.7
+     if(is.na(concentrations)){
+       if (! quiet) warning("No turning concentrations given, initial values set to 0.7")
+       concentrations <- 0.7
      }
+    if(is.na(persistences)){
+      if (! quiet) warning("No directional persistences given, initial values set to 0.5")
+      persistences <- 0.5
+    }
     if(is.na(turnBiases)){
       if (! quiet) warning("No turning biases given, initial values set to 0")
       turnBiases <- 0
@@ -486,12 +510,13 @@ createForagers <- function(numForagers,
   if(!length(locations) == numForagers) stop("number of locations given must equal value of numForagers argument")
   locations <- lapply(locations, to_sf_point, crs = st_crs(bounds))
   foragers <- vector("list", length = numForagers)
-  parameters <- st_sf(geom = reduce(locations,c), BEARING = bearings, SPEED = speeds, SIGHT = sights, GUD = giving_up_density, REPEATAVOID = repeatAvoids, DET = choice_determinism, PERSISTENCE = persistences, BIAS = turnBiases)
+  parameters <- st_sf(geom = reduce(locations,c), BEARING = bearings, SPEED = speeds, SIGHT = sights, GUD = giving_up_density, EFFICIENCY = efficiency, REPEATAVOID = repeatAvoids, DET = choice_determinism, concentration = concentrations, PERSISTENCE = persistences, BIAS = turnBiases)
   if(type == "Random") for (i in 1:numForagers) foragers[[i]] <- Forager(location=parameters$geom[i],
                                                                          bearing = parameters$BEARING[i],
                                                                          speed = parameters$SPEED[i],
                                                                          sight = parameters$SIGHT[i],
                                                                          giving_up_density = parameters$GUD[i],
+                                                                         efficiency = parameters$EFFICIENcY[i],
                                                                          repeatAvoid = parameters$REPEATAVOID[i],
                                                                          choice_determinism = parameters$DET[i]
                                                                          )
@@ -500,9 +525,11 @@ createForagers <- function(numForagers,
                                                                          speed = parameters$SPEED[i],
                                                                          sight = parameters$SIGHT[i],
                                                                          giving_up_density = parameters$GUD[i],
+                                                                         efficiency = parameters$EFFICIENCY[i],
                                                                          repeatAvoid = parameters$REPEATAVOID[i],
                                                                          choice_determinism = parameters$DET[i],
-                                                                         persistence = parameters$PERSISTENCE[i],
+                                                                         concentration = parameters$concentration[i],
+                                                                         persistence = parameters$PERSISTENCE,
                                                                          turnBias = parameters$BIAS[i])
   return(foragers)
 }
