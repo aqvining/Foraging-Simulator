@@ -38,7 +38,11 @@ createForagers(
 
 \item{concentrations}{A single numeric giving the initial concentration of all new foragers or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"}
 
+\item{persistences}{NUmeric vector with values between 0 and 1. Each element of this vector dictates the weight of an agents current direction relative to the direction of the agents current target when choosing a new direction}
+
 \item{sights}{A single numeric giving the initial sight range of all new foragers or a list of numerics equal in length to the value of numForagers}
+
+\item{giving_up_density}{the per-step energy return at which an agent will leave a foraging patch}
 
 \item{efficiency}{the proportion of a patch that an agent extracts and adds to its energy each time step spend foraging}
 
@@ -50,7 +54,7 @@ createForagers(
 
 \item{turnBiases}{A single numeric giving the average turn angle of a forager in radians, or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"}
 
-\item{giving_up_denisty}{the per-step energy return at which an agent will leave a foraging patch}
+\item{choice_determinism}{A numeric vector with values between -1 and 1. For each agent, the corresponding value sets the randomness of its decisions, where -1 is nearly entirely random, 0 sets decision probabities directly proportional to the ratin of patch value to distance, and 1 nearly always selects the most valuable patch}
 }
 \description{
 A wrapper function to create a list of foragers from lists of parameter values. Handles single values if parameter is the same for all foragers. Assigns default values for empty fields.
