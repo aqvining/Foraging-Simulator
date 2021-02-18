@@ -407,7 +407,8 @@ getChoices <- function(forager, patches) {
 }
 
 # Function to get the bearing from the start point of a linestring to the endpoint
-#
+#' @title lineBearing
+#' @description gets the angle of a linestring
 #' @param linestring A st_LINESTRING object
 #' @export
 lineBearing <- function(linestring) {
@@ -587,7 +588,8 @@ scale_attraction <- function(attractions, choice_determinism) {
 }
 
 # Function to create a simple features collection containing a single point created randomly within a set of polygons
-#
+#' @title Bounded Point Generator
+#' @description creates a spatial point object within the confines of a spatial feature (the input)
 #' @param bounds A simple features collection containing polygons within which new point must be created.
 #' @importFrom stats runif
 #' @export
