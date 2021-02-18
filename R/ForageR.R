@@ -381,7 +381,6 @@ DDBRWForager <- setRefClass("ddbrwForager", contains = "brwForager",
 # Function to make a selection given a set of probabilities
 #' @title selector
 #' @param choices a datafame with a column named "prob". Values in this column should be numeric and and up to 1.
-#' @export selector
 selector <- function(choices){
   randomizer <- runif(1)
   i = 1
@@ -410,6 +409,7 @@ getChoices <- function(forager, patches) {
 # Function to get the bearing from the start point of a linestring to the endpoint
 #
 #' @param linestring A st_LINESTRING object
+#' @export
 lineBearing <- function(linestring) {
   endpoints <- st_cast(linestring, "POINT")
   deltaXY <- endpoints[[2]] - endpoints[[1]]
@@ -590,6 +590,7 @@ scale_attraction <- function(attractions, choice_determinism) {
 #
 #' @param bounds A simple features collection containing polygons within which new point must be created.
 #' @importFrom stats runif
+#' @export
 generateBoundedPoint <- function(bounds) {
   location <- c(runif(1, st_bbox(bounds)["xmin"], st_bbox(bounds)["xmax"]), runif(1, st_bbox(bounds)["ymin"], st_bbox(bounds)["ymax"])) %>% st_point() %>% st_sfc(crs = st_crs(bounds))
   while (!st_within(location, bounds, sparse = FALSE)[1,1]) location <- c(runif(1, st_bbox(bounds)["xmin"], st_bbox(bounds)["xmax"]), runif(1, st_bbox(bounds)["ymin"], st_bbox(bounds)["ymax"])) %>% st_point() %>% st_sfc(crs = st_crs(bounds)) #if point not within bounds, recreate
