@@ -303,17 +303,17 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", conc
                                                                                                           mu = circular(turnBias, modulo = "2pi"),
                                                                                                           rho = concentration))
                                 location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
-                                if (!is.na(bounds)){ #check for valid bounds
-                                  turnVarIncrease <- 0
-                                  while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds, if so . . .
-                                    location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
-                                    if(concentration-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional concentration
-                                    bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
-                                                                                             mu = circular(0),
-                                                                                             rho = concentration - turnVarIncrease),
-                                                                    modulo = "2pi")) # get new bearing
-                                    location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #try moving again
-                                  }
+                              }
+                              if (!is.na(bounds)){ #check for valid bounds
+                                turnVarIncrease <- 0
+                                while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds, if so . . .
+                                  location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location
+                                  if(concentration-turnVarIncrease > 0.2) turnVarIncrease <- turnVarIncrease + 0.02 #relax directional concentration
+                                  bearing <<- as.numeric(circular(bearing + rwrappedcauchy(n = 1,
+                                                                                           mu = circular(0),
+                                                                                           rho = concentration - turnVarIncrease),
+                                                                  modulo = "2pi")) # get new bearing
+                                  location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #try moving again
                                 }
                               }
                               path[[length(path)]] <<- st_linestring(rbind(path[[length(path)]], location[[1]]))
