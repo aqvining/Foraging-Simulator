@@ -379,8 +379,9 @@ DDBRWForager <- setRefClass("ddbrwForager", contains = "brwForager",
                             })
 )
 # Function to make a selection given a set of probabilities
-#
+#' @title selector
 #' @param choices a datafame with a column named "prob". Values in this column should be numeric and and up to 1.
+#' @export selector
 selector <- function(choices){
   randomizer <- runif(1)
   i = 1
