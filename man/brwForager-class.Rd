@@ -6,7 +6,7 @@
 \alias{BRWForager}
 \title{brwForager constructor}
 \description{
-Constructor function for a Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target
+Constructor function for a Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target (retaining concentration, but not bias)
 }
 \section{Fields}{
 
@@ -31,7 +31,9 @@ Constructor function for a Biased Random Walk Forager class objects. Objects of 
 
 \item{\code{turnBias}}{a numeric giving the radians from which the center of the wrapped cauchy distribution from which new bearings are drawn should be shifted from the previous bearing.}
 
-\item{\code{persistence}}{a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution}
+\item{\code{concentration}}{a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution}
+
+\item{\code{persistence}}{a numeric between 0 and 1 which weights the value of last step direction relative to the direction of a target when selecting new bearing}
 }}
 
 \section{Methods}{

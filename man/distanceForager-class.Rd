@@ -4,7 +4,7 @@
 \name{distanceForager-class}
 \alias{distanceForager-class}
 \alias{dForager}
-\title{dForager Constrctor}
+\title{dForager Constructor}
 \description{
 Constructor function for distance Forager class objects. Obects of this class behave exactly like forager class objects, but when selecting a target, distance foragers prefer closer targets, discounting targets probability of selection by the cube of their distance
 }
@@ -33,6 +33,6 @@ Constructor function for distance Forager class objects. Obects of this class be
 \section{Methods}{
 
 \describe{
-\item{\code{tSelect(choices)}}{calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect). A forager will always select a patch it is on if possible. Otherwise, selection is random}
+\item{\code{tSelect(choices)}}{calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect).}
 }}
 

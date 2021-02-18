@@ -6,7 +6,7 @@
 \alias{DDBRWForager}
 \title{ddbrwForager constructor}
 \description{
-Constructor function for a Distance Discounting Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target. Target selection is wieghted toward closer targets.
+Constructor function for a Distance Discounting Biased Random Walk Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between a biased random walk (with step lengths drawn from a gamma distribution and bearing drawn from a wrapped cauchy) and directed motion toward a target. Target selection is weighted toward closer targets.
 }
 \section{Fields}{
 
@@ -31,12 +31,12 @@ Constructor function for a Distance Discounting Biased Random Walk Forager class
 
 \item{\code{turnBias}}{a numeric giving the radians from which the center of the wrapped cauchy distribution from which new bearings are drawn should be shifted from the previous bearing.}
 
-\item{\code{persistence}}{a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution}
+\item{\code{concentration}}{a numeric between 0 and one which gives the concentration of the wrapped cauchy distribution from which new bearings are drawn, where a 1 results in a turning angle equal to turnBias every step and a 0 results in a circular random uniform probability distribution}
 }}
 
 \section{Methods}{
 
 \describe{
-\item{\code{tSelect(choices)}}{calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect). A forager will always select a patch it is on if possible. Otherwise, selection is random}
+\item{\code{tSelect(choices)}}{calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect).}
 }}
 

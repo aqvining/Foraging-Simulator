@@ -30,8 +30,9 @@ Constructor function for the ArrayEnvironment class, which inherits from the Env
 \item{\code{initialize(
   ...,
   patches = lapply(rep(2, times = 10), function(x) st_point(runif(x, min = -15, max =
-    15))) \%>\% st_sfc \%>\% data.frame(geom = ., NAME = as.character(1:length(.))) \%>\%
-    st_sf() \%>\% st_buffer(1) \%>\% st_set_crs(32610),
+    15))) \%>\% st_sfc \%>\% data.frame(geom = ., NAME = as.character(1:length(.)),
+    MAX_VALUE = 10, VALUE = 8, REGEN = 1) \%>\% st_sf() \%>\% st_buffer(1) \%>\%
+    st_set_crs(32610),
   bounds = st_sfc(st_buffer(st_convex_hull(reduce(patches$geometry, c)), 1), crs =
     st_crs(patches)),
   foragers = createForagers(3, bounds = bounds, speed = 2, quiet = TRUE)

@@ -40,6 +40,6 @@ Constructor function for Forager class objects. Objects of this class have metho
 \item{\code{setTarget(patches)}}{checks if the location of any simple features in the geometry column of the patches argument (class sfc) are within sight range.
 If so, sets target to a patch randomly selected from those within sight and then sets the targetting field to TRUE}
 
-\item{\code{tSelect(choices)}}{calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect). A forager will always select a patch it is on if possible. Otherwise, selection is random}
+\item{\code{tSelect(choices)}}{calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect).}
 }}
 

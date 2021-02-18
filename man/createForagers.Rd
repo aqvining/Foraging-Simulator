@@ -11,12 +11,16 @@ createForagers(
   locations = NA,
   bearings = NA,
   speeds = NA,
+  concentrations = NA,
   persistences = NA,
   sights = NA,
+  giving_up_density = NA,
+  efficiency = NA,
   repeatAvoids = NA,
   quiet = FALSE,
   CRS = "NA",
-  turnBiases = NA
+  turnBiases = NA,
+  choice_determinism = NA
 )
 }
 \arguments{
@@ -32,9 +36,11 @@ createForagers(
 
 \item{speeds}{A single numeric giving the initial speed of all new foragers or a list of numerics equal in length to the value of numForagers}
 
-\item{persistences}{A single numeric giving the initial persistence of all new foragers or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"}
+\item{concentrations}{A single numeric giving the initial concentration of all new foragers or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"}
 
 \item{sights}{A single numeric giving the initial sight range of all new foragers or a list of numerics equal in length to the value of numForagers}
+
+\item{efficiency}{the proportion of a patch that an agent extracts and adds to its energy each time step spend foraging}
 
 \item{repeatAvoids}{A single numeric giving the number of unique patches a forager must visit before revisting a patch, or a list of numerics equal in length to the value of numForagers}
 
@@ -43,6 +49,8 @@ createForagers(
 \item{CRS}{A numeric giving the CRS code to assign to forager locations. If bounds argument is defined, the CRS of that object will be used and this argument will be ignored}
 
 \item{turnBiases}{A single numeric giving the average turn angle of a forager in radians, or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"}
+
+\item{giving_up_denisty}{the per-step energy return at which an agent will leave a foraging patch}
 }
 \description{
 A wrapper function to create a list of foragers from lists of parameter values. Handles single values if parameter is the same for all foragers. Assigns default values for empty fields.

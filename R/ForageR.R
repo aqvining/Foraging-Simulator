@@ -425,13 +425,15 @@ lineBearing <- function(linestring) {
 #' @param bearings A single numeric giving the initial bearing of all new foragers in radians or a list of numerics equal in length to the value of numForagers
 #' @param speeds A single numeric giving the initial speed of all new foragers or a list of numerics equal in length to the value of numForagers
 #' @param concentrations A single numeric giving the initial concentration of all new foragers or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
+#' @param persistences NUmeric vector with values between 0 and 1. Each element of this vector dictates the weight of an agents current direction relative to the direction of the agents current target when choosing a new direction
 #' @param sights A single numeric giving the initial sight range of all new foragers or a list of numerics equal in length to the value of numForagers
-#' @param giving_up_denisty the per-step energy return at which an agent will leave a foraging patch
+#' @param giving_up_density the per-step energy return at which an agent will leave a foraging patch
 #' @param efficiency the proportion of a patch that an agent extracts and adds to its energy each time step spend foraging
 #' @param repeatAvoids A single numeric giving the number of unique patches a forager must visit before revisting a patch, or a list of numerics equal in length to the value of numForagers
 #' @param quiet A logical indicating whether to suppress warnings about default values used to fill in empty fields
 #' @param CRS A numeric giving the CRS code to assign to forager locations. If bounds argument is defined, the CRS of that object will be used and this argument will be ignored
 #' @param turnBiases A single numeric giving the average turn angle of a forager in radians, or a list of numerics equal in length to the value of numForagers. Ignored unless type = "BRW"
+#' @param choice_determinism A numeric vector with values between -1 and 1. For each agent, the corresponding value sets the randomness of its decisions, where -1 is nearly entirely random, 0 sets decision probabities directly proportional to the ratin of patch value to distance, and 1 nearly always selects the most valuable patch
 #' @export
 #' @importFrom circular circular rcircularuniform rwrappedcauchy
 createForagers <- function(numForagers,
