@@ -204,7 +204,7 @@ Forager <- setRefClass("Forager",
                        },
                        tSelect = function(choices) { "calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect)."
                          #Choices is a spatial features df with same structure as patches plus a DIST column giving the patch distance to forager.
-                         choices$attraction <- (choices$VALUE)/(choices$DIST = 0.001) #Sets attraction based on value and distance. Offset is to avoid dividing by 0 if on a patch boundary
+                         choices$attraction <- (choices$VALUE)/(choices$DIST + 0.001) #Sets attraction based on value and distance. Offset is to avoid dividing by 0 if on a patch boundary
                          choices$attraction <- scale_attraction(choices$attraction, choice_determinism) #scale attractions based on choice determinism
                          choices$prob <- choices$attraction / sum(choices$attraction)
                          return(selector(choices))
