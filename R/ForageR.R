@@ -132,6 +132,7 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
 #' @title Forager Constructor
 #
 #' @description Constructor function for Forager class objects. Objects of this class have methods for finding targets, moving, and plotting. Movement switches between brownian motion (with step lengths drawn from a gamme distribution) and directed toward a target
+#' @field name a character
 #' @field location a simple features collection with a single POINT class object
 #' @field bearing a numeric that gives the current bearing in radians. Default starting bearing is drawn from random uniform circular distribution
 #' @field speed a numeric value that gives the scale parameter of the gamma distribution from which step lengths are draw. Because the shape parameter of this distribution is set to 1, the speed variable will equal the average step length
@@ -148,7 +149,8 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
 #' @import sp
 #' @import ggplot2
 Forager <- setRefClass("Forager",
-                       field = list(location="sfc",
+                       field = list(name = "character"
+                                    location="sfc",
                                     bearing ="numeric",
                                     speed = "numeric",
                                     sight = "numeric",
@@ -163,7 +165,9 @@ Forager <- setRefClass("Forager",
                                     choice_determinism = "numeric",
                                     target = "sf"),
                        method = list(
-                         initialize = function(...,location = st_sfc(st_point(runif(2, -50, 50))),
+                         initialize = function(...,
+                                               name = "Default Forager",
+                                               location = st_sfc(st_point(runif(2, -50, 50))),
                                                bearing = as.numeric(rcircularuniform(1)),
                                                speed = 1, #the mean distance traveled when moving randomly, drawn from a gamma distribution with k (shape) = 1, and theta(scale) = speed. When targeting, moves at 2X speed
                                                sight = 4,
@@ -178,6 +182,7 @@ Forager <- setRefClass("Forager",
                                                choice_determinism = 0,
                                                target = st_sf(st_sfc(st_multipolygon()))) {
                            callSuper(...,
+                                     name = name
                                      location = location,
                                      bearing = bearing,
                                      speed = speed,
@@ -194,54 +199,58 @@ Forager <- setRefClass("Forager",
                                      choice_determinism = choice_determinism)
                            if (speed < 0) stop("speed must be a postive value")
                          },
-                       setTarget = function(patches) { "checks if the location of any simple features in the geometry column of the patches argument (class sfc) are within sight range.
+
+                         setTarget = function(patches) { "checks if the location of any simple features in the geometry column of the patches argument (class sfc) are within sight range.
                          If so, sets target to a patch randomly selected from those within sight and then sets the targetting field to TRUE"
-                         if (! "sf" %in% class(patches)) stop("the 'patches' argument of setTarget must be a simple feature collection")
-                         choices <- getChoices(.self, patches)
-                         if (! "sf" %in% class(choices)) return() #no target set if no patches found in sight
-                         target <<- tSelect(choices)
-                         targeting <<- TRUE
-                       },
-                       tSelect = function(choices) { "calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect)."
-                         #Choices is a spatial features df with same structure as patches plus a DIST column giving the patch distance to forager.
-                         choices$attraction <- (choices$VALUE)/(choices$DIST + 0.001) #Sets attraction based on value and distance. Offset is to avoid dividing by 0 if on a patch boundary
-                         choices$attraction <- scale_attraction(choices$attraction, choice_determinism) #scale attractions based on choice determinism
-                         choices$prob <- choices$attraction / sum(choices$attraction)
-                         return(selector(choices))
-                       },
-                       move = function(bounds = NA) {"moves the forager using rules given in class description. Updates relevant fields including location, bearing, visitSeq, bearing, targetting, and path"
-                         if (targeting) { #if a target is given, assess proximity and action
-                           bearing <<- lineBearing(st_nearest_points(st_set_crs(st_sfc(location), st_crs(target)), target)) #set bearing toward target
-                           if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
-                             location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
-                             visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
-                             targeting <<- FALSE
-                             foraging <<- TRUE
-                           } else location[1] <<- location + 2 * speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
-                         } else { #if not targeting
-                           if(foraging) bounds = target$geometry
-                           bearing <<- as.numeric(rcircularuniform(1))
-                           location[1] <<- location + rgamma(1,
-                                                             shape = 1,
-                                                             scale = speed/(1 + foraging)) * c(cos(bearing), sin(bearing))
-                           if (!is.na(bounds)){ #check for valid bounds
-                             while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
-                               location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location: gets the last linestring in the path sfc, then gets the last row of that linestring matrix
-                               bearing <<- as.numeric(rcircularuniform(1))
-                               location[1] <<- location + rgamma(1,
-                                                                 shape = 1,
-                                                                 scale = speed/(1 + foraging)) * c(cos(bearing), sin(bearing)) #speed reduced by half if foraging
+                           if (! "sf" %in% class(patches)) stop("the 'patches' argument of setTarget must be a simple feature collection")
+                           choices <- getChoices(.self, patches)
+                           if (! "sf" %in% class(choices)) return() #no target set if no patches found in sight
+                           target <<- tSelect(choices)
+                           targeting <<- TRUE
+                         },
+
+                         tSelect = function(choices) { "calculates probablilites and selects a target from a list of options but DOES NOT set the target (use setTarget for this, which calls tSelect)."
+                           #Choices is a spatial features df with same structure as patches plus a DIST column giving the patch distance to forager.
+                           choices$attraction <- (choices$VALUE)/(choices$DIST + 0.001) #Sets attraction based on value and distance. Offset is to avoid dividing by 0 if on a patch boundary
+                           choices$attraction <- scale_attraction(choices$attraction, choice_determinism) #scale attractions based on choice determinism
+                           choices$prob <- choices$attraction / sum(choices$attraction)
+                           return(selector(choices))
+                         },
+
+                         move = function(bounds = NA) {"moves the forager using rules given in class description. Updates relevant fields including location, bearing, visitSeq, bearing, targetting, and path"
+                           if (targeting) { #if a target is given, assess proximity and action
+                             bearing <<- lineBearing(st_nearest_points(st_set_crs(st_sfc(location), st_crs(target)), target)) #set bearing toward target
+                             if (abs(set_units(st_distance(location, target$geometry), NULL)) <= 2 * speed) { #if target is in reach
+                               location[1] <<- st_cast(st_nearest_points(location, target$geometry), "POINT")[[2]] # set location to patch location
+                               visitSeq <<- c(visitSeq, as.character(target$NAME)) #add patch to visitSeq
+                               targeting <<- FALSE
+                               foraging <<- TRUE
+                             } else location[1] <<- location + 2 * speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
+
+                           } else { #if not targeting
+                             if(foraging) bounds = target$geometry
+                             bearing <<- as.numeric(rcircularuniform(1))
+                             location[1] <<- location + rgamma(1,
+                                                               shape = 1,
+                                                               scale = speed/(1 + foraging)) * c(cos(bearing), sin(bearing))
+                             if (!is.na(bounds)){ #check for valid bounds
+                               while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds
+                                 location[1] <<- st_point(path[[length(path)]][nrow(path[[length(path)]]),]) #reset location: gets the last linestring in the path sfc, then gets the last row of that linestring matrix
+                                 bearing <<- as.numeric(rcircularuniform(1))
+                                 location[1] <<- location + rgamma(1,
+                                                                   shape = 1,
+                                                                   scale = speed/(1 + foraging)) * c(cos(bearing), sin(bearing)) #speed reduced by half if foraging
+                               }
                              }
                            }
-                         }
-                         path[[length(path)]] <<- st_linestring(rbind(path[[length(path)]], location[[1]]))
-                         attr(path, "bbox") <<- setNames(unlist(bbox(as_Spatial(path))), c("xmin", "ymin", "xmax", "ymax"))
-                         attr(location, "bbox") <<- setNames(unlist(bbox(as_Spatial(location))), c("xmin", "ymin", "xmax", "ymax"))
-                       },
-                       plot = function(){ "plots the location and path of the forager"
-                         fPlot <-ggplot() + geom_sf(data = location, shape = 13, size = 4) + geom_sf(data = st_cast(path, "LINESTRING")) + theme_classic()
-                         return(fPlot)
-                       })
+                           path[[length(path)]] <<- st_linestring(rbind(path[[length(path)]], location[[1]]))
+                           attr(path, "bbox") <<- setNames(unlist(bbox(as_Spatial(path))), c("xmin", "ymin", "xmax", "ymax"))
+                           attr(location, "bbox") <<- setNames(unlist(bbox(as_Spatial(location))), c("xmin", "ymin", "xmax", "ymax"))
+                         },
+                         plot = function(){ "plots the location and path of the forager"
+                           fPlot <-ggplot() + geom_sf(data = location, shape = 13, size = 4) + geom_sf(data = st_cast(path, "LINESTRING")) + theme_classic()
+                           return(fPlot)
+                         })
 )
 
 #' @title brwForager constructor
@@ -277,6 +286,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", conc
                                 callSuper()
                                 return()
                               }
+
                               if (targeting) { #if a target is given, assess proximity and action
                                 target_direction <- location %>% st_set_crs(value = st_crs(target)) %>% #prepares location for comparison to target (which may have multiple location points)
                                   st_nearest_points(target) %>% #returns linestring between forager and target
@@ -288,6 +298,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", conc
                                   bearing <<- target_direction
                                   targeting <<- FALSE
                                   foraging <<- TRUE
+
                                 } else { #if target is not in reach
                                   target_deviation <- circular(target_direction - bearing, modulo = "2pi")
                                   if(abs(target_deviation) > pi) target_deviation <- target_deviation - (2*pi)
@@ -298,12 +309,14 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", conc
                                                                   modulo = "2pi"))
                                   location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
                                 }
+
                               } else { #if not targeting
                                 bearing <<- as.numeric(circular(bearing, modulo = "2pi") + rwrappedcauchy(n = 1,
                                                                                                           mu = circular(turnBias, modulo = "2pi"),
                                                                                                           rho = concentration))
                                 location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing))
                               }
+
                               if (!is.na(bounds)){ #check for valid bounds
                                 turnVarIncrease <- 0
                                 while(! st_within(location, bounds, sparse = FALSE)[1,1]) {#check if out of bounds, if so . . .
