@@ -149,7 +149,7 @@ ArrayEnvironment <- setRefClass("ArrayEnvironment", fields= list(sequence = "cha
 #' @import sp
 #' @import ggplot2
 Forager <- setRefClass("Forager",
-                       field = list(name = "character"
+                       field = list(name = "character",
                                     location="sfc",
                                     bearing ="numeric",
                                     speed = "numeric",
@@ -182,7 +182,7 @@ Forager <- setRefClass("Forager",
                                                choice_determinism = 0,
                                                target = st_sf(st_sfc(st_multipolygon()))) {
                            callSuper(...,
-                                     name = name
+                                     name = name,
                                      location = location,
                                      bearing = bearing,
                                      speed = speed,
@@ -307,7 +307,7 @@ BRWForager <- setRefClass("brwForager", fields = list(turnBias = "numeric", conc
                                                                                            mu = targeting_bias,
                                                                                            rho = concentration),
                                                                   modulo = "2pi"))
-                                  location[1] <<- location + speed * c(cos(bearing), sin(bearing)) #otherwise, move closer
+                                  location[1] <<- location + rgamma(1, shape = 1, scale = speed) * c(cos(bearing), sin(bearing)) #otherwise, move closer
                                 }
 
                               } else { #if not targeting

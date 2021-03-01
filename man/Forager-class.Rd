@@ -11,6 +11,8 @@ Constructor function for Forager class objects. Objects of this class have metho
 \section{Fields}{
 
 \describe{
+\item{\code{name}}{a character}
+
 \item{\code{location}}{a simple features collection with a single POINT class object}
 
 \item{\code{bearing}}{a numeric that gives the current bearing in radians. Default starting bearing is drawn from random uniform circular distribution}
