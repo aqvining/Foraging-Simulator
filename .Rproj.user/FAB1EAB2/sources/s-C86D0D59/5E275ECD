@@ -3,7 +3,7 @@
     "path": "~/Foraging Simulator/R/ForageR.R",
     "project_path": "R/ForageR.R",
     "type": "r_source",
-    "hash": "2343835843",
+    "hash": "0",
     "contents": "",
     "dirty": false,
     "created": 1598273746752.0,
@@ -14,11 +14,11 @@
         "scrollLine": "4"
     },
     "folds": "",
-    "lastKnownWriteTime": 1598622576,
+    "lastKnownWriteTime": 1614617021,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1598622576807,
+    "last_content_update": 1614617021,
     "read_only": false,
     "read_only_alternatives": []
 }

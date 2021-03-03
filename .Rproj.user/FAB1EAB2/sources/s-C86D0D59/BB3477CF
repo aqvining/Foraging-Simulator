@@ -3,7 +3,7 @@
     "path": "~/Foraging Simulator/NAMESPACE",
     "project_path": "NAMESPACE",
     "type": "r_namespace",
-    "hash": "2787375280",
+    "hash": "0",
     "contents": "",
     "dirty": false,
     "created": 1598544499963.0,
@@ -19,6 +19,6 @@
     "collab_server": "",
     "source_window": "",
     "last_content_update": 1598622581,
-    "read_only": true,
+    "read_only": false,
     "read_only_alternatives": []
 }
