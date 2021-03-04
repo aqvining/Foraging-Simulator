@@ -1,0 +1,112 @@
+#' @title Simulate Over Parameter Space
+#'
+#' @description Allows complete parameterization of a set of simulations. Meant to be added to as more parameters are divised to be iterated over
+#'
+#' @import dplyr
+#'
+#' @param num_patches numeric
+#' @param forager_directedness numeric
+#' @param forager_persistence numeric
+#' @param forager_choice_determinism numeric
+#' @param field_radius numeric
+#' @param patch_radius numeric
+#' @param patch_max_value numeric
+#' @param patch_starting_value numeric
+#' @param patch_regen numeric
+#' @param forager_speed numeric
+#' @param forager_sight numeric
+#' @param forager_GUD numeric
+#' @param forager_efficiency numeric
+#' @param simulation_length numeric
+#'
+#' @return list containing objects of Environment Class
+#' @export
+#'
+run_full_parameter_space <-  function(num_patches = 2, forager_directedness = 0.5, forager_persistence = 0.6, forager_choice_determinism = 0, field_radius = 50, patch_radius = 1, patch_max_value = 10, patch_starting_value = 3, patch_regen = 0.03, forager_speed = 1, forager_sight = 20, forager_GUD = 0.3, forager_efficiency = 0.1, simulation_length = 2000) {
+
+  parameters = list(num_patches = num_patches,
+                    forager_directedness = forager_directedness,
+                    forager_persistence = forager_persistence,
+                    forager_choice_determinism = forager_choice_determinism,
+                    field_radius = field_radius,
+                    patch_radius = patch_radius,
+                    patch_max_value = patch_max_value,
+                    patch_starting_value = patch_starting_value,
+                    patch_regen = patch_regen,
+                    forager_speed = forager_speed,
+                    forager_sight = forager_sight,
+                    forager_GUD = forager_GUD,
+                    forager_efficiency = forager_efficiency)
+
+  all_simulations <- vector("list", length = prod(lengths(parameters)))
+
+  i = 1 #keeps truck of which simulation is being run
+
+  #generate simulations by iterating over all possible parameter combinations. Here, I have manualy chosen to loop over the parameters I set to vary
+  for(NP in num_patches) { #please forgive the abbreviations
+    for(FD in forager_directedness) {
+      for(FP in forager_persistence) {
+        for(FCD in forager_choice_determinism) {
+          for(FR in field_radius) {
+            for(PR in patch_radius) {
+              for(PMV in patch_max_value) {
+                for(PSV in patch_starting_value) {
+                  for(regen in patch_regen) {
+                    for(fspeed in forager_speed) {
+                      for(fsight in forager_sight) {
+                        for(GUD in forager_GUD) {
+                          for(fefficiency in forager_efficiency) {
+                            print(paste("number of patches = ", NP, ", forager directedness = ", FD, ", forager persistence = ", FP, ", forager determinsism = ", FCD)) #Fill in all parameters at end
+
+                            #First, create the boundaries of the environment
+                            field <- st_point(c(0,0)) %>% st_buffer(dist = FR) %>% st_sfc() #field boundary for simulations is a spatial features collection with one spatial feature geometry: a circle centered on 0,0 with a radius as defined at beginning of script
+
+                            #Second, create the patches
+                            patches <- rep(st_buffer(field, dist = -PR), times = NP) %>%        #start by defining the bounds within which each point should be created. Here, a single boundary defines possible space for all points, hence the use of rep
+                              sapply(generateBoundedPoint) %>% st_sfc() %>%                               #for each boundary given, generate a spatial point within that space then store points into a spatial features collection
+                              st_buffer(dist = PR) %>%                                          #transform generated points into circles with given patch radius
+                              data.frame(geom = .,
+                                         NAME = as.character(1:length(.)),
+                                         MAX_VALUE = PMV,
+                                         VALUE = PSV,
+                                         REGEN = regen) %>% st_sf()                                 #store patch circles into a spatial features data frame with metadata
+
+                            #Third, create the foragers. I only allow one forager per environment, but the package can already handle multiple foragers simultaneously (it get's much slower though)
+                            foragers <- createForagers(1, #number of foragers
+                                                       type = "BRW", #BRW = Biased Random Walk. This is one way of defining randomness and correlation in agent movement. It inherets from a class that is purely random and can apply these methods too. Other movement types exist in the package, but this one is the most fully integrated
+                                                       bounds = field,
+                                                       concentrations = FD, #concentration variable name comes from the parameter used for a wrapped cauchy distribution, but I call the variable directedness when defining because that seems more intuitive/applicable. Will rename to add clarity
+                                                       speeds = fspeed,
+                                                       sights = fsight,
+                                                       giving_up_density = GUD,
+                                                       quiet = TRUE,        #prevents warnings I set up to notify users of parameters that are being set to defaults
+                                                       choice_determinism = FCD, #note abbrevation for iterative loops above
+                                                       efficiency = fefficiency,
+                                                       persistences = FP) #abbreviation from paramerter iteration loop
+
+                            #Put all the pieces together using the Environment reference class defined in the ForageR package
+                            simulator <- Environment(foragers = foragers, bounds = field, patches = patches)
+
+                            #run the generated environment for 2000 steps
+                            for(step in 1:simulation_length) {
+                              simulator$progress()
+                            }
+
+                            #save the full simulation and move to next iteration
+                            all_simulations[[i]] <- simulator
+                            i = i + 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return(all_simulations)
+}

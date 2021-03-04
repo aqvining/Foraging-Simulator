@@ -1,24 +1,24 @@
 {
-    "id": "BB3477CF",
-    "path": "~/Foraging Simulator/NAMESPACE",
-    "project_path": "NAMESPACE",
-    "type": "r_namespace",
-    "hash": "0",
+    "id": "1CD09F91",
+    "path": "Z:/simulations/Route_Sims/run_main.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "1345306582",
     "contents": "",
     "dirty": false,
-    "created": 1598544499963.0,
+    "created": 1614783541525.0,
     "source_on_save": false,
     "relative_order": 3,
     "properties": {
-        "cursorPosition": "7,16",
+        "cursorPosition": "131,0",
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1598622581,
+    "lastKnownWriteTime": 1614017269,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1598622581,
+    "last_content_update": 1614017269,
     "read_only": false,
     "read_only_alternatives": []
 }

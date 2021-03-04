@@ -1,0 +1,24 @@
+{
+    "id": "4122F36E",
+    "path": "~/Foraging Simulator/R/Environments.R",
+    "project_path": "R/Environments.R",
+    "type": "r_source",
+    "hash": "464401771",
+    "contents": "",
+    "dirty": false,
+    "created": 1614786704874.0,
+    "source_on_save": false,
+    "relative_order": 7,
+    "properties": {
+        "cursorPosition": "8,12",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1614782854,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1614782854,
+    "read_only": false,
+    "read_only_alternatives": []
+}

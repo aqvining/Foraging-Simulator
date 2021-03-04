@@ -1,0 +1,53 @@
+#' @title Extract Path Data
+#'
+#' @param environment_list a list with Environment class objects in each element
+#'
+#' @return list, paths data frame in first element, metadata in second
+#' @export
+#'
+extract_path_data <- function(environment_list) {
+  #input: environment_list: A list containing an object of reference class Environment in each element
+  #output: a list with 2 objects. 1) a data frame with a row for each location all foragers in all environments 2)a dataframe with one row with the forager ID (keyed to first dataframe) and the simulation parameters of that forager and its environment
+  #description: pulls movement and properties from the Foragers in an Environment object and stores them easy to use data frames with a reference key by forager name
+  all_paths <- vector("list", length = length(environment_list)) #empty list for storing movement data from each environment. using a list allows for rbind to be used within an environment (assuming number of foragers is small enough that this won't be too slow), then find the total number of steps and create an empty data frame to combine all the data. Reduces processing time by avoiding rbind when many environments are simulated
+
+  total_foragers <- sum(sapply(environment_list, FUN = function(environment) length(environment$foragers))) #find total number of foragers to define number of rows in empty data frame for metadata reference
+  all_IDs <- data.frame(matrix(nrow = total_foragers, ncol = 5, dimnames = list(NULL, c("ID", "Persistence", "Directedness", "Choice_Determinism", "Num_Patches")))) #empty data frame for storing simulation parameters associated with each ID in all_paths
+
+  #run data extraction loops
+  i <- 0 #tracks the total number of foragers that have been processed
+  for (e in 1:length(environment_list)) {
+    environment_paths <- data.frame(matrix(nrow = 0, ncol = 4, dimnames = list(NULL, c("X", "Y", "Step", "ID")))) #empty storage for the paths of each forager in an environment
+    for (f in 1:length(environment_list[[e]]$foragers)) {
+      i <-  i + 1
+      print(paste("Extracting Data from environment ", e))
+      forager <-environment_list[[e]]$foragers[[f]]
+      id <- paste("E", e, "F", f, sep = "")
+
+      #get forager path and add to environment_paths data frame~~~~
+      forager_path <- forager$path %>% st_cast("POINT") %>% st_coordinates() %>% data.frame() #matrix with x,y columns for a forager
+      forager_path$Step <- 0:(nrow(forager_path) - 1) #first point is step zero, ensures points can always be reordered/evaluated by step number in a data frame with multiple individuals
+      forager_path$ID <- id
+
+      environment_paths <- rbind(environment_paths, forager_path)
+      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+      #Compile meta-data ~~~~~~~~~~~~~~
+      all_IDs[i,] <- c(id, forager$persistence, forager$concentration, forager$choice_determinism, nrow(environment_list[[e]]$patches))
+      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    }
+    all_paths[[e]] <- environment_paths
+  }
+
+  #~~~~~compile movement data~~~~~~~~~~~~~~~~
+  print("compiling all movement data . . . this will take approximately the same amount of time as data extraction")
+  total_steps <- sum(sapply(all_paths, nrow))
+  all_paths_df <- data.frame(matrix(nrow = total_steps, ncol = 4, dimnames = list(NULL, c("X", "Y", "Step", "ID"))))
+  i <- 0 #tracks how many steps have been added
+  for(e in 1:length(all_paths)) {
+    total_new_steps <- nrow(all_paths[[e]])
+    all_paths_df[(i + 1):(i + total_new_steps),] <- all_paths[[e]]
+    i <- i + total_new_steps
+  }
+  return(list(all_paths_df, all_IDs))
+}

@@ -1,0 +1,24 @@
+{
+    "id": "E1151D25",
+    "path": "~/Foraging Simulator/R/run_full_parameter_space.R",
+    "project_path": "R/run_full_parameter_space.R",
+    "type": "r_source",
+    "hash": "503305741",
+    "contents": "",
+    "dirty": false,
+    "created": 1614783680899.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "cursorPosition": "109,3",
+        "scrollLine": "65"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1614788848,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1614788848,
+    "read_only": false,
+    "read_only_alternatives": []
+}

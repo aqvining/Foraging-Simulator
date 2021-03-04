@@ -1,0 +1,130 @@
+##~~Patch Notes
+#Fix drop units errors +
+#Forager, brwForager Paths as Linestrings +
+#Allow multiple linestrings in Forager paths +
+#Add crwForager -
+#dont relocate forager in ArrayEnvironment after final trial +
+
+#' @import sp
+#' @import dplyr
+#' @importFrom circular circular rwrappedcauchy
+#' @importFrom purrr reduce
+#' @importFrom stats runif
+#' @importFrom units set_units
+#' @import methods
+#' @import sf
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~Object Set-up~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+
+
+# Function to calculate distance between a forager and a set of patches, then return the patches withing sight range of the forager and their distances
+#' @title Choice Finder
+#' @param forager A single object of Forager class
+#' @param patches A simple features data frame with a geom column containing the geometries of patches.
+#' @importFrom units set_units
+getChoices <- function(forager, patches) {
+  recentVisits <- forager$visitSeq[c((length(forager$visitSeq) - (forager$repeatAvoid - 1)):length(forager$visitSeq))] #check which patches forager has visited recently
+  patches <- patches[! patches$NAME %in% recentVisits,] #remove recently visited patches
+  distances <- set_units(st_distance(forager$location, patches), NULL) #get distances to each patch
+  if (sum(distances <= forager$sight) == 0) return(NA)                                                                        #if no patches in sight, return no target
+  choices <- patches[which(distances[1,] <= forager$sight),]
+  choices$DIST <- distances[distances[1,] <= forager$sight]
+  return(choices)
+}
+
+# Function to get the bearing from the start point of a linestring to the endpoint
+#' @title lineBearing
+#' @description gets the angle of a linestring
+#' @param linestring A st_LINESTRING object
+#' @export
+lineBearing <- function(linestring) {
+  endpoints <- st_cast(linestring, "POINT")
+  deltaXY <- endpoints[[2]] - endpoints[[1]]
+  return(atan2(x = deltaXY[1], y = deltaXY[2]))
+}
+
+
+
+# Function to flexibly handle multiple point formats and converts to a simple features collection
+#' @title Make point sfc
+#' @param point A length two numeric vector, an st_POINT, or and sfc_POINT class object
+#' @param crs A numeric giving the CRS code to apply to the point argument
+to_sf_point <- function(point, crs = NA) {
+  if (is.numeric(point)) {
+    if (!length(point) == 2) stop("point argument is numeric, but not of length 2")
+    point <- st_point(point)
+  }
+  if ("POINT" %in% class(point)) point <- st_sfc(point, crs = crs)
+  if ("sfc_POINT" %in% class(point)) return(point) else stop("point argument must be a numeric vector, a POINT object, or a geometry collection with POINT objects")
+}
+
+#' @title Logistic Growth
+#' @description A function to determine a patches location on its logistic growth curve (solved from VALUE), then increase VALUE by one unit of time on the curve
+#
+#' @param y a vector of numerics representing current values experiencing logistic growth
+#' @param max the horizontal asymptote of the growth function
+#' @param scale the maximum growth rate
+#' @param yadj scales the sigmoid midpoint on y axis, relative to max. At 0.5, maximum growth occurs at time 0
+logistic_growth <- function(y, max = 1, scale = 0.2, yadj = 0.5) {
+  #output: a vector of numerics of equal length to input
+  #description: returns values in the x variable as a function of logistic growth, using remaining input parameters
+  #Notes: This is probably a more complicated growth curve than necessary
+  t <- log(-(yadj * (max + y))/((yadj - 1) * max + (yadj * y)))/scale #gets current location on growth curve (solved from modified logistic growth equation below)
+  t <- t + 1
+  y <- (max/yadj) * (1/(1+exp(-scale*(t))) -yadj) #reconverts from t to y
+  return(y)
+}
+
+#' @title Deterministic Attraction Modifier
+#' @description Modifies a vector of attraction values based on the deterministic nature of the choice. When choice determinism is positive, the best choice becomes relatively more attractive.
+#
+#' @param attractions a vector of numerics representing attractiveness of various options
+#' @param choice_determinism numeric. At 0, choice probability is directly proportional to attraction. When negative, the choice becomes more random. When positive, better options become relatively more attractive. Absolute values of 1 approach full randomness/determinism
+#' @examples
+#' \dontrun{
+#' x <- seq(0,10,0.1)
+#'
+#' plot(x, scale_attraction(x, 0))
+#' lines(x, scale_attraction(x, 0.2), col = "green")
+#' lines(x, scale_attraction(x, 0.5), col = "yellow")
+#' lines(x, scale_attraction(x, 0.9), col = "red")
+#' lines(x, scale_attraction(x, -0.2), col = "green")
+#' lines(x, scale_attraction(x, -0.5), col = "yellow")
+#' lines(x, scale_attraction(x, -0.9), col = "red")
+#' }
+scale_attraction <- function(attractions, choice_determinism) {
+  #output: a vector of numerics of equal length to input
+  attractions <- attractions^(100^choice_determinism)/max(attractions)^((100^choice_determinism)-1) #100 is a scaling parameter chosen to see strong effects at -1 and 1.
+  return(attractions)
+}
+
+# Function to create a simple features collection containing a single point created randomly within a set of polygons
+#' @title Bounded Point Generator
+#' @description creates a spatial point object within the confines of a spatial feature (the input)
+#' @param bounds A simple features collection containing polygons within which new point must be created.
+#' @importFrom stats runif
+#' @export
+generateBoundedPoint <- function(bounds) {
+  location <- c(runif(1, st_bbox(bounds)["xmin"], st_bbox(bounds)["xmax"]), runif(1, st_bbox(bounds)["ymin"], st_bbox(bounds)["ymax"])) %>% st_point() %>% st_sfc(crs = st_crs(bounds))
+  while (!st_within(location, bounds, sparse = FALSE)[1,1]) location <- c(runif(1, st_bbox(bounds)["xmin"], st_bbox(bounds)["xmax"]), runif(1, st_bbox(bounds)["ymin"], st_bbox(bounds)["ymax"])) %>% st_point() %>% st_sfc(crs = st_crs(bounds)) #if point not within bounds, recreate
+  return(location)
+}
+
+
+###~~~~~~Sample Script~~~~~~~~
+
+#' @examples
+#' newPatches <- lapply(rep(2, times = 20), function(x) st_point(runif(x, min = -100, max = 100))) %>% st_sfc %>% data.frame(geom = ., NAME = as.character(1:length(.))) %>% st_sf() %>% st_buffer(1) %>% st_set_crs(32610) #creates sf dataframe with 200 randomly created circular patches with radius of 2
+#' brwForagers <- createForagers(5, type = "BRW", bounds = st_sfc(st_convex_hull(reduce(testPatches$geometry, c)), crs = st_crs(testPatches)), speeds = 4, sights = 8, quiet = TRUE)
+#' rForagers <- createForagers(5, bounds = st_sfc(st_convex_hull(reduce(testPatches$geometry, c)), crs = st_crs(testPatches)), speeds = c(2,4,6,8,10), sights = 5, quiet = TRUE)
+#' mixedForagers <- c(brwForagers, rForagers)
+#' testEnviron <- Environment(foragers = testForagers, patches = testPatches)
+#' testEnviron$plotCurrent()
+#' for (t in seq(50)) testEnviron$progress()
+#' testEnviron$plotPaths()
+

@@ -6,7 +6,7 @@ Author: Alexander Vining
 Maintainer: Alexander Vining <aqvining@ucdavis.edu>
 Description: More about what it does (maybe more than one line)
     Use four spaces when indenting paragraphs within the Description.
-License: MIT
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Imports: circular, stats, dplyr, sp, ggplot2, geosphere, stplanr, units, spatstat, methods, purrr
