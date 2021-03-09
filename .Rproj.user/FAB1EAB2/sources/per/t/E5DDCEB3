@@ -1,0 +1,24 @@
+{
+    "id": "E5DDCEB3",
+    "path": "~/Foraging Simulator/R/parameter_iterators.R",
+    "project_path": "R/parameter_iterators.R",
+    "type": "r_source",
+    "hash": "4260798353",
+    "contents": "",
+    "dirty": false,
+    "created": 1615286352212.0,
+    "source_on_save": false,
+    "relative_order": 9,
+    "properties": {
+        "cursorPosition": "137,28",
+        "scrollLine": "124"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1615286420,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1615286420709,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,198 @@
+setwd("Z:/simulations/Route_Sims")
+install.packages("https://github.com/aqvining/Foraging-Simulator")
+library(ForageR)
+library(tidyverse)
+
+
+determinisms <- seq(-1,1,by = 0.1)
+regens <- seq(0.01, 0.2, by = 0.01) #can't start at 0, because undefined for scale parameter of logistic function
+all_simulations <- vector("list", length = length(determinisms) * length(regens))
+
+i = 1 #keeps truck of which simulation is being run
+seperate_patches <- function(patch_geoms, iterations = 10) {
+  #input: patch_geoms; a spatial features collects (geometry list)
+  #       iterations: positive integer
+  #output: same structure as patch_geoms
+  #description: checks for overlap of any geometries in patch_geoms, and shifts any overlapping patches away from each other. Will repeat up to "iterations" times
+  i = 1
+  while(sum(lengths(st_overlaps(patch_geoms))) > 0 & i <= iterations) {
+    for(patch in which(lengths(st_overlaps(patch_geoms)) > 0 )) {
+      self_centroid <- st_centroid(patch_geoms[[patch]])
+      overlap_centroids <- st_centroid(patch_geoms[st_overlaps(patch_geoms)[[patch]]])
+      if (length(overlap_centroids) > 0) for (j in 1:length(overlap_centroids)) { #if statement catches cases in which overlaps have already been removed by moving patch earlier in patches_geom
+        patch_geoms[[patch]] <- patch_geoms[[patch]] + (self_centroid - overlap_centroids[[j]])/2
+      }
+    }
+    i = i + 1
+  }
+  if (i > iterations) warning("failed to remove patch overlaps")
+  patch_geoms
+}
+
+for(determinism in determinisms) {
+  for(regen in regens) {
+    
+    print(paste("determinism = ", determinism, ", regen = ", regen))
+
+    field <- st_point(c(0,0)) %>% st_buffer(dist = 30) %>% st_sfc()
+    
+    foragers <- createForagers(1, #number of foragers
+                               type = "BRW", #BRW = Biased Random Walk. This is one way of defining randomness and correlation in agent movement. It inherets from a class that is purely random and can apply these methods too. Other movement types exist in the package, but this one is the most fully integrated
+                               bounds = field, 
+                               concentrations = 0.8, #concentration variable name comes from the parameter used for a wrapped cauchy distribution, but I call the variable directedness when defining because that seems more intuitive/applicable. Will rename to add clarity
+                               speeds = 1, 
+                               sights = 60, 
+                               giving_up_density = 0.3, 
+                               quiet = TRUE,        #prevents warnings I set up to notify users of parameters that are being set to defaults
+                               choice_determinism = determinism, #note abbreviation for iterative loops above
+                               efficiency = 0.1, 
+                               persistences = 0.5) #abbreviation from parameter iteration loop
+    
+    patches <- rep(st_buffer(field, dist = -2), times = 4) %>%        #start by defining the bounds within which each point should be created. Here, a single boundary defines possible space for all points, hence the use of rep
+      sapply(generateBoundedPoint) %>% st_sfc() %>%                               #for each boundary given, generate a spatial point within that space then store points into a spatial features collection
+      st_buffer(dist = 2) %>%                                          #transform generated points into circles with given patch radius
+      seperate_patches() %>%                                          #move any overlapping patches apart. May push patches outside of bounds
+      data.frame(geom = ., 
+                 NAME = as.character(1:length(.)), 
+                 MAX_VALUE = 10, 
+                 VALUE = 9, 
+                 REGEN = regen) %>% st_sf()                                 #store patch circles into a spatial features data frame with metadata
+    
+    
+    simulator <- Environment(foragers = foragers, bounds = field, patches = patches)
+    
+    for(step in 1:2000) {
+      simulator$progress()
+    }
+    
+    all_simulations[[i]] <- simulator
+    i = i + 1
+  }
+}
+
+#kicked error at i = 401 (det = 1)
+
+save(all_simulations, file = "route_detections_sims2.Rdata")
+
+extract_path_data <- function(environment_list) {
+  #input: environment_list: A list containing an object of reference class Environment in each element
+  #output: a list with 2 objects. 1) a data frame with a row for each location all foragers in all environments 2)a dataframe with one row with the forager ID (keyed to first dataframe) and the simulation parameters of that forager and its environment
+  #description: pulls movement and properties from the Foragers in an Environment object and stores them easy to use data frames with a reference key by forager name
+  all_paths <- vector("list", length = length(environment_list)) #empty list for storing movement data from each environment. using a list allows for rbind to be used within an environment (assuming number of foragers is small enough that this won't be too slow), then find the total number of steps and create an empty data frame to combine all the data. Reduces processing time by avoiding rbind when many environments are simulated
+  
+  total_foragers <- sum(sapply(environment_list, FUN = function(environment) length(environment$foragers))) #find total number of foragers to define number of rows in empty data frame for metadata reference
+  all_IDs <- data.frame(matrix(nrow = total_foragers, ncol = 5, dimnames = list(NULL, c("ID", "Persistence", "Directedness", "Choice_Determinism", "Num_Patches")))) #empty data frame for storing simulation parameters associated with each ID in all_paths
+  
+  #run data extraction loops
+  i <- 0 #tracks the total number of foragers that have been processed
+  for (e in 1:length(environment_list)) {
+    environment_paths <- data.frame(matrix(nrow = 0, ncol = 4, dimnames = list(NULL, c("X", "Y", "Step", "ID")))) #empty storage for the paths of each forager in an environment
+    for (f in 1:length(environment_list[[e]]$foragers)) {
+      i <-  i + 1
+      print(paste("Extracting Data from environment ", e))
+      forager <-environment_list[[e]]$foragers[[f]]
+      id <- paste("E", e, "F", f, sep = "")
+      
+      #get forager path and add to environment_paths data frame~~~~
+      forager_path <- forager$path %>% st_cast("POINT") %>% st_coordinates() %>% data.frame() #matrix with x,y columns for a forager
+      forager_path$Step <- 0:(nrow(forager_path) - 1) #first point is step zero, ensures points can always be reordered/evaluated by step number in a data frame with multiple individuals
+      forager_path$ID <- id
+      
+      environment_paths <- rbind(environment_paths, forager_path)
+      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      
+      #Compile meta-data ~~~~~~~~~~~~~~
+      all_IDs[i,] <- c(id, forager$persistence, forager$concentration, forager$choice_determinism, nrow(environment_list[[e]]$patches))
+      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    }
+    all_paths[[e]] <- environment_paths
+  }
+  
+  #~~~~~compile movement data~~~~~~~~~~~~~~~~
+  print("compiling all movement data . . . this will take approximately the same amount of time as data extraction")
+  total_steps <- sum(sapply(all_paths, nrow))
+  all_paths_df <- data.frame(matrix(nrow = total_steps, ncol = 4, dimnames = list(NULL, c("X", "Y", "Step", "ID"))))
+  i <- 0 #tracks how many steps have been added
+  for(e in 1:length(all_paths)) {
+    total_new_steps <- nrow(all_paths[[e]])
+    all_paths_df[(i + 1):(i + total_new_steps),] <- all_paths[[e]]
+    i <- i + total_new_steps
+  }
+  return(list(all_paths_df, all_IDs))
+}
+
+simulations_tidy <- extract_path_data(all_simulations)
+
+write_csv(simulations_tidy[[1]], "route_sims2_all_paths.csv")
+write_csv(simulations_tidy[[2]], "route_sims2_ID_metadata.csv")
+
+load("route_detections_sims2.Rdata")
+all_paths <- read_csv("route_sims2_all_paths.csv")
+ID_metadata <- read_csv("route_sims2_ID_metadata.csv")
+
+get_step_metrics_individual <- function(individual_movement_data, x = "X", y = "Y", step_number = NA) {
+  #input: individual movement data; a data_frame with at least two columns containing x and y coordinate data.
+  #       x; character giving name of column with x coordinates
+  #       y; character giving name of column with y coordinates
+  #       step_number: name of a column with the ordered number of steps. Used to ensure proper sorting
+  #output: a data frame of same structure as individual_movement_data with an additional columns named "Step_length" and "Step_Turn"
+  #description: calculates distance traveled between all consecutive points (rows) in the data frame
+  if (! is.na(step_number)) individual_movement_data <- individual_movement_data[order(individual_movement_data[,step_number]),] #sort by step number
+  diff_x <- diff(individual_movement_data[[x]])
+  diff_y <- diff(individual_movement_data[[y]])
+  
+  individual_movement_data$Step_length <- c(NA, mapply(FUN = function(a,b) sqrt(a^2 + b^2), a = diff_x, b = diff_y)) #first row is NA because no step has been taken, subsequent rows are hypotenuse of delta x and delta y
+  
+  step_angles <- mapply(atan2, y = diff_y, x = diff_x)
+  step_turns <- (diff(step_angles) + pi) %% (2*pi) - pi #scales all turns from -pi to pi, rather than -2pi to 2pi which results from simple distancing, e.g. turns of -pi/2 and 3pi/2 will both be converted to -pi/2
+  individual_movement_data$Step_turn <- c(NA, NA, step_turns)
+  return(individual_movement_data)
+}
+
+#add step length and turn angle to all movement data
+all_paths <- all_paths %>% group_by(ID) %>% nest() %>% #break dataframe into groups by ID and store into nested data frame for function mapping
+  mutate(data = map(data, get_step_metrics_individual, step_number = "Step")) %>% 
+  unnest(cols = c(data))
+
+#summarize step lengths and turning angles by individual
+outcomes_by_ID <- all_paths %>% summarize(step_length_mean = mean(Step_length, na.rm = TRUE),
+                                          step_length_sd = sd(Step_length, na.rm = TRUE),
+                                          step_turn_mean = mean(Step_turn, na.rm = TRUE),
+                                          step_turn_sd = sd(Step_turn, na.rm = TRUE))
+
+#functions for getting patch visit data
+get_E_F_numbers <- function(ID) {
+  ID %>% strsplit(split = "E") %>% .[[1]] %>% strsplit(split = "F") %>% .[[2]] %>% as.numeric()
+}
+
+get_patch_visit_counts <- function(ID, all_simulations, ID_metadata) {
+  #extracts number of times a forager visited each patch in its environment. Uses metadata to ensure 0 visit patches ar included
+  IDsplit <- get_E_F_numbers(ID)
+  e <- IDsplit[1] #environment number
+  f <- IDsplit[2] #forager number
+  visit_sequence <- all_simulations[[e]]$foragers[[f]]$visitSeq
+  visit_sequence <- factor(visit_sequence, levels = as.character(1:ID_metadata$Num_Patches[ID_metadata$ID == ID]))
+  table(visit_sequence)
+}
+
+#add patch visit summaries to outcomes df. Sorry this is so ugly
+outcomes_by_ID <- outcomes_by_ID %>% mutate(total_patch_visits = sapply(ID, function(X) sum(get_patch_visit_counts(X, all_simulations, ID_metadata))), #for each ID, get the table with counts for each possible patchs and sum
+                                            patch_visit_proportion_sd = sapply(ID, function(X) sd(get_patch_visit_counts(X, all_simulations, ID_metadata)))/total_patch_visits, #standard deviation on patch counts for each ID, normalized by total patch visits (sd on proportion of visits)
+                                            energy_extracted = sapply(ID, function(X) all_simulations[[get_E_F_numbers(X)[1]]]$foragers[[get_E_F_numbers(X)[2]]]$energy), # for each ID, extract the energy field from the relevant forager in all_simulations
+                                            regen = sapply(ID, function(X) all_simulations[[get_E_F_numbers(X)[1]]]$patches$REGEN %>% mean()),              #for each forager ID, get the mean regen rate of patches in environment 
+)
+summary_data_full <- merge(ID_metadata, outcomes_by_ID, by = "ID")
+
+
+for(id in summary_data_full$ID) {
+  i = get_E_F_numbers(id)[1]
+  simulation_plot <- all_simulations[[i]]$plotPaths()
+  simulation_plot <- simulation_plot + labs(title = paste("Determinism = ", summary_data_full$Choice_Determinism[summary_data_full$ID == id],
+                                                          " regen = ", summary_data_full$regen[summary_data_full$ID == id]))
+  tiff(filename = paste("./sims2_plots/sim2_id", id, ".tiff", sep = ""))
+  print(simulation_plot)
+  dev.off()
+}
+
+
+ggplot(summary_data_full) + geom_jitter(aes(x = regen, y = patch_visit_proportion_sd, color = Choice_Determinism))

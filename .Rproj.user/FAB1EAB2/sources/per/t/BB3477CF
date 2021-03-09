@@ -3,7 +3,7 @@
     "path": "~/Foraging Simulator/NAMESPACE",
     "project_path": "NAMESPACE",
     "type": "r_namespace",
-    "hash": "1706898532",
+    "hash": "1193814438",
     "contents": "",
     "dirty": false,
     "created": 1598544499963.0,
@@ -14,11 +14,11 @@
         "scrollLine": "0"
     },
     "folds": "",
-    "lastKnownWriteTime": 1614788285,
+    "lastKnownWriteTime": 1615286448,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1614788285,
+    "last_content_update": 1615286448,
     "read_only": true,
     "read_only_alternatives": []
 }

@@ -65,6 +65,7 @@ run_full_parameter_space <-  function(num_patches = 2, forager_directedness = 0.
                             patches <- rep(st_buffer(field, dist = -PR), times = NP) %>%        #start by defining the bounds within which each point should be created. Here, a single boundary defines possible space for all points, hence the use of rep
                               sapply(generateBoundedPoint) %>% st_sfc() %>%                               #for each boundary given, generate a spatial point within that space then store points into a spatial features collection
                               st_buffer(dist = PR) %>%                                          #transform generated points into circles with given patch radius
+                              seperate_patches() %>%
                               data.frame(geom = .,
                                          NAME = as.character(1:length(.)),
                                          MAX_VALUE = PMV,
@@ -134,6 +135,7 @@ run_hypercube_sample <- function(sample_value_df, num_steps = 2000, file_path = 
     patches <- rep(st_buffer(field, dist = -sample_value_df$Patch_radius[i]), times = sample_value_df$Num_patches[i]) %>%        #start by defining the bounds within which each point should be created. Here, a single boundary defines possible space for all points, hence the use of rep
       sapply(generateBoundedPoint) %>% st_sfc() %>%                               #for each boundary given, generate a spatial point within that space then store points into a spatial features collection
       st_buffer(dist = sample_value_df$Patch_radius[i]) %>%                                          #transform generated points into circles with given patch radius
+      seperate_patches() %>%
       data.frame(geom = .,
                  NAME = as.character(1:length(.)),
                  MAX_VALUE = sample_value_df$Patch_max_value[i],

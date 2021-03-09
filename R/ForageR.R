@@ -5,6 +5,8 @@
 #Add crwForager -
 #dont relocate forager in ArrayEnvironment after final trial +
 
+
+#'
 #' @import sp
 #' @import dplyr
 #' @importFrom circular circular rwrappedcauchy
@@ -15,8 +17,30 @@
 #' @import sf
 
 
-
-#~~~~~~~~~~~~~~~~~~~~~~Object Set-up~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#' @title Patch Separator
+#' @description checks for overlap of any geometries in patch_geoms, and shifts any overlapping patches away from each other. Will repeat up to "iterations" times
+#' @param patch_geoms a spatial features collection (geometry list)#'
+#' @param iterations #numeric giving number of interations to seperate before quitting with warning
+#' @return sfc with adjusted patch locations
+seperate_patches <- function(patch_geoms, iterations = 10) {
+  #input: patch_geoms; a spatial features collects (geometry list)
+  #       iterations: positive integer
+  #output: same structure as patch_geoms
+  #description: checks for overlap of any geometries in patch_geoms, and shifts any overlapping patches away from each other. Will repeat up to "iterations" times
+  i = 1
+  while(sum(lengths(st_overlaps(patch_geoms))) > 0 & i <= iterations) { #as long as any patches are overlapping and max iterations have not been reached . . .
+    for(patch in which(lengths(st_overlaps(patch_geoms)) > 0 )) {       #for each patch with an overlap . . .
+      self_centroid <- st_centroid(patch_geoms[[patch]])                #get centroid
+      overlap_centroids <- st_centroid(patch_geoms[st_overlaps(patch_geoms)[[patch]]]) #and centroids of overlapping patches
+      if (length(overlap_centroids) > 0) for (j in 1:length(overlap_centroids)) { #if statement catches cases in which overlaps have already been removed by moving patch earlier in patches_geom
+        patch_geoms[[patch]] <- patch_geoms[[patch]] + (self_centroid - overlap_centroids[[j]])/2 #move current patch 50% further away from all patches it is overlapping
+      }
+    }
+    i = i + 1
+  }
+  if (i > iterations) warning("failed to remove patch overlaps")
+  patch_geoms
+}
 
 
 
