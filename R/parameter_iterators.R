@@ -110,3 +110,59 @@ run_full_parameter_space <-  function(num_patches = 2, forager_directedness = 0.
   }
   return(all_simulations)
 }
+
+#' @title Hypercube Sample Simulator
+#'
+#' @param sample_value_df a dataframe with named columns for each parameter in ForageR parameter space
+#' @param num_steps the number of steps with to run each set of simulation parameters (rows in sample_value_df)
+#' @param file_path character giving a path to save environments in prior to each simulation
+#'
+#' @return list of environment class objects
+#' @export
+#'
+run_hypercube_sample <- function(sample_value_df, num_steps = 2000, file_path = NA) {
+  parameter_names <- c("Num_patches", "Forager_directedness", "Forager_persistence", "Forager_choice_determinism", "Field_radius", "Patch_radius", "Patch_max_value", "Patch_starting_value", "Patch_regen", "Forager_speed", "Forager_sight", "Forager_GUD", "Forager_efficiency")
+  if(! all(colnames(sample_value_df) %in% parameter_names) | ! all(parameter_names %in% colnames(sample_value_df))) stop(paste('colnames of sample_value_df not set correctly. Colnames should be set to', paste(parameter_names, collapse = ", ")))
+  environments <- vector("list", length = nrow(sample_value_df))
+  for(i in 1:nrow(sample_value_df)){
+    print(sample_value_df[i,])
+
+    #First, create the boundaries of the environment
+    field <- st_point(c(0,0)) %>% st_buffer(dist = sample_value_df$Field_radius[i]) %>% st_sfc() #field boundary for simulations is a spatial features collection with one spatial feature geometry: a circle centered on 0,0 with a radius as defined at beginning of script
+
+    #Second, create the patches
+    patches <- rep(st_buffer(field, dist = -sample_value_df$Patch_radius[i]), times = sample_value_df$Num_patches[i]) %>%        #start by defining the bounds within which each point should be created. Here, a single boundary defines possible space for all points, hence the use of rep
+      sapply(generateBoundedPoint) %>% st_sfc() %>%                               #for each boundary given, generate a spatial point within that space then store points into a spatial features collection
+      st_buffer(dist = sample_value_df$Patch_radius[i]) %>%                                          #transform generated points into circles with given patch radius
+      data.frame(geom = .,
+                 NAME = as.character(1:length(.)),
+                 MAX_VALUE = sample_value_df$Patch_max_value[i],
+                 VALUE = sample_value_df$Patch_starting_value[i],
+                 REGEN = sample_value_df$Patch_regen[i]) %>% st_sf()                                 #store patch circles into a spatial features data frame with metadata
+
+    #Third, create the foragers. I only allow one forager per environment, but the package can already handle multiple foragers simultaneously (it get's much slower though)
+    foragers <- createForagers(1, #number of foragers
+                               type = "BRW", #BRW = Biased Random Walk. This is one way of defining randomness and correlation in agent movement. It inherets from a class that is purely random and can apply these methods too. Other movement types exist in the package, but this one is the most fully integrated
+                               bounds = field,
+                               concentrations = sample_value_df$Forager_directedness[i], #concentration variable name comes from the parameter used for a wrapped cauchy distribution, but I call the variable directedness when defining because that seems more intuitive/applicable. Will rename to add clarity
+                               speeds = sample_value_df$Forager_speed[i],
+                               sights = sample_value_df$Forager_sight[i],
+                               giving_up_density = sample_value_df$Forager_GUD[i],
+                               quiet = TRUE,        #prevents warnings I set up to notify users of parameters that are being set to defaults
+                               choice_determinism = sample_value_df$Forager_choice_determinism[i], #note abbreviation for iterative loops above
+                               efficiency = sample_value_df$Forager_efficiency[i],
+                               persistences = sample_value_df$Forager_persistence[i])
+
+    #Put all the pieces together using the Environment reference class defined in the ForageR package
+    environments[[i]] <- Environment(foragers = foragers, bounds = field, patches = patches)
+
+    ##save environments here so that if an error is produced during simulation, the progress is retained and the initial environment producing an error can be recovered for debugging
+    if (! is.na(file_path)) save(environments, file = file_path)
+
+    #run the generated environment for 2000 steps
+    for(step in 1:num_steps) {
+      environments[[i]]$progress()
+    }
+  }
+  return(environments)
+}
