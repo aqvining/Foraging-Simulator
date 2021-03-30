@@ -51,7 +51,7 @@ createForagers <- function(numForagers,
     if (! quiet) warning("No giving up density given, initial values set to 0.5")
     giving_up_density <- 0.5
   }
-  if (is.na(giving_up_density)) {
+  if (is.na(efficiency)) {
     if (! quiet) warning("No efficiencies given, initial values set to 0.1")
     efficiency <- 0.1
   }
