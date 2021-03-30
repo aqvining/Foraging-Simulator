@@ -101,7 +101,7 @@ createForagers <- function(numForagers,
                                                                          speed = parameters$SPEED[i],
                                                                          sight = parameters$SIGHT[i],
                                                                          giving_up_density = parameters$GUD[i],
-                                                                         efficiency = parameters$EFFICIENcY[i],
+                                                                         efficiency = parameters$EFFICIENCY[i],
                                                                          repeatAvoid = parameters$REPEATAVOID[i],
                                                                          choice_determinism = parameters$DET[i]
   )
