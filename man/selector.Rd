@@ -7,7 +7,7 @@
 selector(choices)
 }
 \arguments{
-\item{choices}{a datafame with a column named "prob". Values in this column should be numeric and and up to 1.}
+\item{choices}{a datafame with a column named "prob". Values in this column should be numeric and add up to 1.}
 }
 \description{
 selector

@@ -1,93 +1,81 @@
 #install.packages("https://github.com/aqvining/Foraging-Simulator")
 library(ForageR)
 library(tidyverse)
+library(lhs)
 
 setwd("Z:/simulations/Route_Sims")
 
-num_patches <- 3
-patch_radius <- 2 #patches will have a circular shape with given radius, inside which agents can forage
-field_radius <- 50 #this radius will be used to create a bound inside which all patches and foragers will be created and can not leave
-patch_clustering <- 1 #not implemented
-patch_max_value <-  10
-patch_starting_value <- 9
-patch_regen <- 0.1
+hypercube_sample <- randomLHS(n = 2500, k = 3) #finds parameter values to minimize correlation in distance through multi-dimensional space
 
-forager_directedness <- 0.5 #The concentration parameter to define a wrapped cauchy distribution from which forager bearing deviations are drawn. When 1 each step will be deterministic in direction. When 0, movement direction is fully random.
-forager_persistence <- 0.6 #The weight of the direction of the foragers previous step versus the direction of a target when selecting new step direction. At 1, the forager will always move in accordance with their turnBias. At 0, they will move toward the target (with accuracy determined by concentration argument)
-forager_GUD <- 0.5 #rate of return at which a forager will leave a patch
-forager_choice_determinism <- 0
+num_patches <- c(sapply(2:5, rep, times = nrow(hypercube_sample))) #will run full hypercube sample set for each number of patches
+patch_radius <- 2 #patches will have a circular shape with given radius, inside which agents can forage
+field_radius <- 30 #this radius will be used to create a bound inside which all patches and foragers will be created and can not leave
+patch_clustering <- 1 #not implemented
+patch_max_value <- 40/num_patches#current version of ForageR::run_full_parameter_space will ignore this variable, and internally use iteration specific num_patches/40 instead
+patch_starting_value <- patch_max_value/10 #current version of ForageR::run_full_parameter_space will ignore this variable, and internally use iteration specific patch_max_value/10 instead
+patch_regen <- 0.02
+
+forager_directedness <- hypercube_sample[,1] #The concentration parameter to define a wrapped cauchy distribution from which forager bearing deviations are drawn. When 1 each step will be deterministic in direction. When 0, movement direction is fully random.
+forager_persistence <- hypercube_sample[,2] #The weight of the direction of the foragers previous step versus the direction of a target when selecting new step direction. At 1, the forager will always move in accordance with their turnBias. At 0, they will move toward the target (with accuracy determined by concentration argument)
+forager_GUD <- 0.3 #rate of return at which a forager will leave a patch, look for J Davidson + Kirkpatrick normative model for patch departure time
+forager_choice_determinism <- 2 * hypercube_sample[,3] - 1 #hypercube samples from 0 to 1, scales to -1 to 1
 forager_efficiency <- 0.1 #proportion of an patch's current value which a forager extracts and adds to its energy at each time step
 forager_speed <-  1 #speed of the forager, generally used as the scale parameter in a gamma distribution for drawing step lengths.
 forager_sight <-  100 #the distance at which a forager can detect patches to choose from. Set to > field diameter to give foragers omniscient knowledge of the environment.
 
 simulation_length = 2000
+
+sample_space <- data.frame(Num_patches = num_patches,
+                           Forager_directedness = forager_directedness, #vector repeated to fill length of num_patches
+                           Forager_persistence = forager_persistence, #vector repeated to fill length of num_patches
+                           Forager_choice_determinism = forager_choice_determinism, #vector repeated to fill length of num_patches
+                           Field_radius = field_radius,
+                           Patch_radius = patch_radius,
+                           Patch_max_value = patch_max_value,
+                           Patch_starting_value = patch_starting_value,
+                           Patch_regen = patch_regen,
+                           Forager_speed = forager_speed,
+                           Forager_sight = forager_sight,
+                           Forager_GUD = forager_GUD,
+                           Forager_efficiency = forager_efficiency)
 #Run simulations~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#First, determine the number of simulations to run and create an empty list to store them in
-all_simulations <- run_full_parameter_space(num_patches = num_patches,
-                                            forager_directedness = forager_directedness,
-                                            forager_persistence = forager_persistence,
-                                            forager_choice_determinism = forager_choice_determinism,
-                                            field_radius = field_radius, patch_radius = patch_radius,
-                                            patch_max_value = patch_max_value,
-                                            patch_starting_value = patch_starting_value,
-                                            patch_regen = patch_regen,
-                                            forager_speed = forager_speed,
-                                            forager_sight = forager_sight,
-                                            forager_GUD = forager_GUD,
-                                            forager_efficiency = forager_efficiency,
-                                            simulation_length = simulation_length)
-
-save(all_simulations, file = "route_detections_sims1")
-
-
-extract_path_data <- function(environment_list) {
-  #input: environment_list: A list containing an object of reference class Environment in each element
-  #output: a list with 2 objects. 1) a data frame with a row for each location all foragers in all environments 2)a dataframe with one row with the forager ID (keyed to first dataframe) and the simulation parameters of that forager and its environment
-  #description: pulls movement and properties from the Foragers in an Environment object and stores them easy to use data frames with a reference key by forager name
-  all_paths <- vector("list", length = length(environment_list)) #empty list for storing movement data from each environment. using a list allows for rbind to be used within an environment (assuming number of foragers is small enough that this won't be too slow), then find the total number of steps and create an empty data frame to combine all the data. Reduces processing time by avoiding rbind when many environments are simulated
-
-  total_foragers <- sum(sapply(environment_list, FUN = function(environment) length(environment$foragers))) #find total number of foragers to define number of rows in empty data frame for metadata reference
-  all_IDs <- data.frame(matrix(nrow = total_foragers, ncol = 5, dimnames = list(NULL, c("ID", "Persistence", "Directedness", "Choice_Determinism", "Num_Patches")))) #empty data frame for storing simulation parameters associated with each ID in all_paths
-
-  #run data extraction loops
-  i <- 0 #tracks the total number of foragers that have been processed
-  for (e in 1:length(environment_list)) {
-    environment_paths <- data.frame(matrix(nrow = 0, ncol = 4, dimnames = list(NULL, c("X", "Y", "Step", "ID")))) #empty storage for the paths of each forager in an environment
-    for (f in 1:length(environment_list[[e]]$foragers)) {
-      i <-  i + 1
-      print(paste("Extracting Data from environment ", e))
-      forager <-environment_list[[e]]$foragers[[f]]
-      id <- paste("E", e, "F", f, sep = "")
-
-      #get forager path and add to environment_paths data frame~~~~
-      forager_path <- forager$path %>% st_cast("POINT") %>% st_coordinates() %>% data.frame() #matrix with x,y columns for a forager
-      forager_path$Step <- 0:(nrow(forager_path) - 1) #first point is step zero, ensures points can always be reordered/evaluated by step number in a data frame with multiple individuals
-      forager_path$ID <- id
-
-      environment_paths <- rbind(environment_paths, forager_path)
-      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-      #Compile meta-data ~~~~~~~~~~~~~~
-      all_IDs[i,] <- c(id, forager$persistence, forager$concentration, forager$choice_determinism, nrow(environment_list[[e]]$patches))
-      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    }
-    all_paths[[e]] <- environment_paths
-  }
-
-  #~~~~~compile movement data~~~~~~~~~~~~~~~~
-  print("compiling all movement data . . . this will take approximately the same amount of time as data extraction")
-  total_steps <- sum(sapply(all_paths, nrow))
-  all_paths_df <- data.frame(matrix(nrow = total_steps, ncol = 4, dimnames = list(NULL, c("X", "Y", "Step", "ID"))))
-  i <- 0 #tracks how many steps have been added
-  for(e in 1:length(all_paths)) {
-    total_new_steps <- nrow(all_paths[[e]])
-    all_paths_df[(i + 1):(i + total_new_steps),] <- all_paths[[e]]
-    i <- i + total_new_steps
-  }
-  return(list(all_paths_df, all_IDs))
+write.csv(sample_space, "./sims3_2500/sim3_hypercube_2500")
+for (i in seq(1, nrow(sample_space), 100)) { #break into 100 simulation chunks for memory management
+  sample_subset <- sample_space[i:(i+99),]
+  simulations <- run_hypercube_sample(sample_subset, num_steps = simulation_length, file = NA)
+  save(simulations, file = paste("./sims3_2500/route_detections_sims3_", i,".Rdata", sep = ""))
+  rm(simulations)
+  gc()
 }
+
+###Error debug~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Num_patches Forager_directedness Forager_persistence Forager_choice_determinism
+# 682           2            0.8976662           0.9483459                   0.982179
+# Field_radius Patch_radius Patch_max_value Patch_starting_value Patch_regen
+# 682           30            2              20                    2        0.02
+# Forager_speed Forager_sight Forager_GUD Forager_efficiency
+# 682             1           100         0.3                0.1
+# Error in while (choices$prob[i] <= randomizer) { :
+#     missing value where TRUE/FALSE needed
+load("route_detections_sims3.Rdata")
+buggy_environment <- environments[[682]]
+buggy_environment$plotPaths() #As expected, environment exists, forager has not moved (saved before simulations started.)
+#patches overlapping, which should not be the case. Has code not implemented, or has it failed for some reason?
+run_hypercube_sample
+
+###~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+save(all_simulations, file = "route_detections_sims3.Rdata")
+
+
+
+
+source("extract_path_data.R")
+
+#first run, 3123 runs completed
+
 
 simulations_tidy <- extract_path_data(all_simulations)
 
-write_csv(simulations_tidy[[1]], "route_sims1_all_paths.csv")
-write_csv(simulations_tidy[[2]], "route_sims1_ID_metadata.csv")
+write_csv(simulations_tidy[[1]], "route_sims3_all_paths.csv")
+write_csv(simulations_tidy[[2]], "route_sims3_ID_metadata.csv")

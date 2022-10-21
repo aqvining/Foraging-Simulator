@@ -53,7 +53,7 @@ seperate_patches <- function(patch_geoms, iterations = 10) {
 #' @importFrom units set_units
 getChoices <- function(forager, patches) {
   recentVisits <- forager$visitSeq[c((length(forager$visitSeq) - (forager$repeatAvoid - 1)):length(forager$visitSeq))] #check which patches forager has visited recently
-  patches <- patches[! patches$NAME %in% recentVisits,] #remove recently visited patches
+  patches <- patches[! patches$NAME %in% recentVisits & (patches$VALUE * forager$efficiency) > forager$giving_up_density,] #remove recently visited patches and those that would be passed over according to the marginal value theorem
   distances <- set_units(st_distance(forager$location, patches), NULL) #get distances to each patch
   if (sum(distances <= forager$sight) == 0) return(NA)                                                                        #if no patches in sight, return no target
   choices <- patches[which(distances[1,] <= forager$sight),]
@@ -98,6 +98,7 @@ logistic_growth <- function(y, max = 1, scale = 0.2, yadj = 0.5) {
   #output: a vector of numerics of equal length to input
   #description: returns values in the x variable as a function of logistic growth, using remaining input parameters
   #Notes: This is probably a more complicated growth curve than necessary
+  if(max == 0) return(0)
   t <- log(-(yadj * (max + y))/((yadj - 1) * max + (yadj * y)))/scale #gets current location on growth curve (solved from modified logistic growth equation below)
   t <- t + 1
   y <- (max/yadj) * (1/(1+exp(-scale*(t))) -yadj) #reconverts from t to y
@@ -123,7 +124,7 @@ logistic_growth <- function(y, max = 1, scale = 0.2, yadj = 0.5) {
 #' }
 scale_attraction <- function(attractions, choice_determinism) {
   #output: a vector of numerics of equal length to input
-  attractions <- attractions^(100^choice_determinism)/max(attractions)^((100^choice_determinism)-1) #100 is a scaling parameter chosen to see strong effects at -1 and 1.
+  attractions <- attractions^(50^choice_determinism)/max(attractions)^((50^choice_determinism)-1) #50 is a scaling parameter chosen to see strong effects at -1 and 1. Initiall 100 was selected, but it yield numerators approximate to infinity
   return(attractions)
 }
 

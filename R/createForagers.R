@@ -78,7 +78,7 @@ createForagers <- function(numForagers,
       locations <- locationPoints
     }
   }
-  if (type == "BRW"){
+  if (type == "BRW" | type == "dBRW"){
     if(is.na(concentrations)){
       if (! quiet) warning("No turning concentrations given, initial values set to 0.7")
       concentrations <- 0.7
@@ -116,5 +116,16 @@ createForagers <- function(numForagers,
                                                                          concentration = parameters$concentration[i],
                                                                          persistence = parameters$PERSISTENCE,
                                                                          turnBias = parameters$BIAS[i])
+  if(type == "dBRW") for (i in 1:numForagers) foragers[[i]] <- DDBRWForager(location=parameters$geom[i],
+                                                                            bearing = parameters$BEARING[i],
+                                                                            speed = parameters$SPEED[i],
+                                                                            sight = parameters$SIGHT[i],
+                                                                            giving_up_density = parameters$GUD[i],
+                                                                            efficiency = parameters$EFFICIENCY[i],
+                                                                            repeatAvoid = parameters$REPEATAVOID[i],
+                                                                            choice_determinism = parameters$DET[i],
+                                                                            concentration = parameters$concentration[i],
+                                                                            persistence = parameters$PERSISTENCE,
+                                                                            turnBias = parameters$BIAS[i])
   return(foragers)
 }

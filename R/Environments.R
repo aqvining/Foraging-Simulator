@@ -37,7 +37,7 @@ Environment <- setRefClass("Environment",
                                  forager$move(bounds = bounds)
                                  if(forager$foraging) execute_forage(forager)
                                }
-                               patches <<- patches %>% mutate(VALUE = logistic_growth(y = VALUE, max = MAX_VALUE, scale = REGEN))
+                               patches <<- patches %>% mutate(VALUE = mapply(logistic_growth, y = VALUE, max = MAX_VALUE, scale = REGEN))
                              },
                              execute_forage = function(forager) { #reduces the value of the forager's target patch, will eventually also increase energy of forager
                                updated_patch <- forager$target$NAME
