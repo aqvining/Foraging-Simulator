@@ -98,7 +98,6 @@ logistic_growth <- function(y, max = 1, scale = 0.2, yadj = 0.5) {
   #output: a vector of numerics of equal length to input
   #description: returns values in the x variable as a function of logistic growth, using remaining input parameters
   #Notes: This is probably a more complicated growth curve than necessary
-  if(max == 0) return(0)
   t <- log(-(yadj * (max + y))/((yadj - 1) * max + (yadj * y)))/scale #gets current location on growth curve (solved from modified logistic growth equation below)
   t <- t + 1
   y <- (max/yadj) * (1/(1+exp(-scale*(t))) -yadj) #reconverts from t to y
